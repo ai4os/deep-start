@@ -212,8 +212,9 @@ if [ "$use_jupyter" = true ]; then
    echo "[INFO] Attempt to start JupyterLab"
    Jupyter_PORT=8888
    [[ "$gpu_mode" = true ]] && Jupyter_PORT=$PORT2
-   cmd="jupyterPORT=$Jupyter_PORT /srv/.jupyter/run_jupyter.sh --allow-root"
-   echo "[Jupyter] $cmd"
+   cmd="/srv/.jupyter/run_jupyter.sh --allow-root"
+   echo "[Jupyter] jupyterPORT=$Jupyter_PORT, $cmd"
+   export jupyterPORT=$Jupyter_PORT
    $cmd &
    jupyter_pid=$!
    echo "[Jupyter] PID=$jupyter_pid"
