@@ -17,6 +17,7 @@
 # -j|--jupyterlab - start jupyterlab
 # -o|--onedata    - mount remote using oneclient
 # -r|--rclone     - mount remote with rclone (experimental!)
+# NOTE: if you try to start deepaas AND jupyterlab, only deepaas will start!
 ###
 
 
@@ -33,7 +34,8 @@ function usage()
     -d|--deepaas \t start deepaas-run
     -j|--jupyter \t start JupyterLab, if installed
     -o|--onedata \t mount remote storage usinge oneclient
-    -r|--rclone  \t mount remote storage with rclone (experimental!)" 1>&2; exit 0; 
+    -r|--rclone  \t mount remote storage with rclone (experimental!)
+    NOTE: if you try to start deepaas AND jupyterlab, only deepaas will start!" 1>&2; exit 0; 
 }
 
 # define flags
@@ -135,10 +137,6 @@ function check_arguments()
                 ;;
         esac
     done
-
-    [[ "$debug_it" = true ]] && echo "[DEBUG] cpu: '$cpu_mode', gpu: '$gpu_mode', \
-deepaas: '$use_deepaas', jupyter: '$use_jupyter', rclone: '$use_rclone', \
-onedata: '$use_onedata'"
 }
 
 function check_pid()
@@ -174,6 +172,17 @@ function check_env()
 check_nvidia
 check_arguments "$0" "$@"
 
+# if you try to start deepaas AND jupyterlab, only deepaas will start!
+if [[ "$use_deepaas" = true && "$use_jupyter" = true ]]; then
+   use_jupyter=false
+   echo "[WARNING] You are trying to start DEEPaaS AND JupyterLab, only DEEPaaS will start!"
+fi
+
+# debugging printout
+[[ "$debug_it" = true ]] && echo "[DEBUG] cpu: '$cpu_mode', gpu: '$gpu_mode', \
+deepaas: '$use_deepaas', jupyter: '$use_jupyter', rclone: '$use_rclone', \
+onedata: '$use_onedata'"
+
 if [ "$use_onedata" = true ]; then
    echo "[INFO] Attempt to use ONEDATA"
    check_env ONECLIENT_ACCESS_TOKEN $onedata_error
@@ -186,14 +195,17 @@ if [ "$use_onedata" = true ]; then
    fi
    cmd="oneclient $ONEDATA_MOUNT_POINT"
    echo "[ONEDATA] $cmd"
-   # seems if started in background, later gets another PID
+   # seems if started in the background, later gets another PID
    $cmd
    onedata_pid=$(pidof oneclient)
    echo "[ONEDATA] PID=$onedata_pid"
    check_pid "$onedata_pid" "$onedata_error"
+   # if neither deepaas or jupyter is selected, enable deepaas:
+   [[ "$use_deepaas" = false && "$use_jupyter" = false ]] && use_deepaas=true
 fi
 
 if [ "$use_rclone" = true ]; then
+   # EXPERIMENTAL!
    echo "[INFO] Attempt to use RCLONE"
    check_env RCLONE_REMOTE_STORAGE $rclone_error
    [[ ! -v RCLONE_MOUNT_POINT || -z "${RCLONE_MOUNT_POINT}" ]] && RCLONE_MOUNT_POINT="/mnt/rclone"
@@ -203,10 +215,12 @@ if [ "$use_rclone" = true ]; then
    fi
    cmd="rclone mount --vfs-cache-mode full $RCLONE_REMOTE_STORAGE $RCLONE_MOUNT_POINT"
    echo "[RCLONE] $cmd"
-   nohup $cmd >/tmp/rclone.log &
+   $cmd &
    rclone_pid=$!
    echo "[RCLONE] PID=$rclone_pid"
    check_pid "$rclone_pid" "$rclone_error"
+   # if neither deepaas or jupyter is selected, enable deepaas:
+   [[ "$use_deepaas" = false && "$use_jupyter" = false ]] && use_deepaas=true
 fi
 
 if [ "$use_deepaas" = true ]; then
@@ -215,10 +229,8 @@ if [ "$use_deepaas" = true ]; then
    [[ "$gpu_mode" = true ]] && DEEPaaS_PORT=$PORT0
    cmd="deepaas-run --openwhisk-detect --listen-ip=0.0.0.0 --listen-port=$DEEPaaS_PORT"
    echo "[DEEPaaS] $cmd"
-   nohup $cmd >/tmp/deepaas.log &
-   deepaas_pid=$!
-   echo "[DEEPaaS] PID=$deepaas_pid"
-   check_pid "$deepaas_pid" "$deepaas_error"
+   $cmd
+   # we can't put process in the background, as the container will stop
 fi
 
 if [ "$use_jupyter" = true ]; then
@@ -228,8 +240,6 @@ if [ "$use_jupyter" = true ]; then
    cmd="/srv/.jupyter/run_jupyter.sh --allow-root"
    echo "[Jupyter] jupyterPORT=$Jupyter_PORT, $cmd"
    export jupyterPORT=$Jupyter_PORT
-   nohup $cmd >/tmp/jupyter.log &
-   jupyter_pid=$!
-   echo "[Jupyter] PID=$jupyter_pid"
-   check_pid "$jupyter_pid" "$jupyter_error"
+   $cmd
+   # we can't put process in the background, as the container will stop
 fi
