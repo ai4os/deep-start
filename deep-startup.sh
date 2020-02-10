@@ -11,8 +11,8 @@
 ### info
 # Startup script for DEEP-OC containers
 # Available options:
-# -c|--cpu - execute container on CPU only (default)
-# -g|--gpu - activate GPU-related parameters
+# -c|--cpu - force container on CPU only  (otherwise detected automatically)
+# -g|--gpu - force GPU-related parameters (otherwise detected automatically)
 # -d|--deepaas    - start deepaas-run
 # -j|--jupyterlab - start jupyterlab
 # -o|--onedata    - mount remote using oneclient
@@ -28,8 +28,8 @@ function usage()
     echo "Usage: $0 <options> \n
     Options:
     -h|--help \t\t the help message
-    -c|--cpu \t\t CPU-only execuition
-    -g|--gpu \t\t activate GPU execution mode
+    -c|--cpu \t\t force CPU-only execuition (otherwise detected automatically)
+    -g|--gpu \t\t force GPU execution mode (otherwise detected automatically)
     -d|--deepaas \t start deepaas-run
     -j|--jupyter \t start JupyterLab, if installed
     -o|--onedata \t mount remote storage usinge oneclient
@@ -49,6 +49,17 @@ rclone_error="4"
 deepaas_error="5"
 jupyter_error="6"
 
+function check_nvidia()
+{ # check if nvidia GPU is present
+  if command nvidia-smi 2>/dev/null; then
+    echo "[INFO] NVIDIA is present"
+    cpu_mode=false
+    gpu_mode=true
+  else
+    cpu_mode=true
+    gpu_mode=false
+  fi
+}
 
 function check_arguments()
 {
@@ -78,9 +89,10 @@ function check_arguments()
     eval set -- "$PARSED"
 
     if [ "$1" == "--" ]; then
-        echo "[INFO] No arguments provided. Start deepaas on CPU as default"
-        cpu_mode="true"
-        use_deepaas="true"
+        echo "[INFO] No arguments provided. Start deepaas as default"
+        # check if NVIDIA-GPU is present
+        check_nvidia
+        use_deepaas=true
     fi
 
     # now enjoy the options in order and nicely split until we see --
@@ -159,6 +171,7 @@ function check_env()
    fi   
 }
 
+check_nvidia
 check_arguments "$0" "$@"
 
 if [ "$use_onedata" = true ]; then
@@ -190,7 +203,7 @@ if [ "$use_rclone" = true ]; then
    fi
    cmd="rclone mount --vfs-cache-mode full $RCLONE_REMOTE_STORAGE $RCLONE_MOUNT_POINT"
    echo "[RCLONE] $cmd"
-   $cmd &
+   nohup $cmd >/tmp/rclone.log &
    rclone_pid=$!
    echo "[RCLONE] PID=$rclone_pid"
    check_pid "$rclone_pid" "$rclone_error"
@@ -202,7 +215,7 @@ if [ "$use_deepaas" = true ]; then
    [[ "$gpu_mode" = true ]] && DEEPaaS_PORT=$PORT0
    cmd="deepaas-run --openwhisk-detect --listen-ip=0.0.0.0 --listen-port=$DEEPaaS_PORT"
    echo "[DEEPaaS] $cmd"
-   $cmd &
+   nohup $cmd >/tmp/deepaas.log &
    deepaas_pid=$!
    echo "[DEEPaaS] PID=$deepaas_pid"
    check_pid "$deepaas_pid" "$deepaas_error"
@@ -215,7 +228,7 @@ if [ "$use_jupyter" = true ]; then
    cmd="/srv/.jupyter/run_jupyter.sh --allow-root"
    echo "[Jupyter] jupyterPORT=$Jupyter_PORT, $cmd"
    export jupyterPORT=$Jupyter_PORT
-   $cmd &
+   nohup $cmd >/tmp/jupyter.log &
    jupyter_pid=$!
    echo "[Jupyter] PID=$jupyter_pid"
    check_pid "$jupyter_pid" "$jupyter_error"
