@@ -9,7 +9,7 @@
 # @author: vykozlov
 
 ### info
-# Startup script for DEEP-OC containers
+# Start script for DEEP-OC containers
 # Available options:
 # -c|--cpu - force container on CPU only  (otherwise detected automatically)
 # -g|--gpu - force GPU-related parameters (otherwise detected automatically)
@@ -237,7 +237,7 @@ if [ "$use_jupyter" = true ]; then
    echo "[INFO] Attempt to start JupyterLab"
    Jupyter_PORT=8888
    [[ "$gpu_mode" = true ]] && Jupyter_PORT=$PORT2
-   cmd="/srv/.jupyter/run_jupyter.sh --allow-root"
+   cmd="/srv/.deep-start/run_jupyter.sh --allow-root"
    echo "[Jupyter] jupyterPORT=$Jupyter_PORT, $cmd"
    export jupyterPORT=$Jupyter_PORT
    $cmd
