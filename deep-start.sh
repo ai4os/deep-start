@@ -207,13 +207,13 @@ fi
 if [ "$use_rclone" = true ]; then
    # EXPERIMENTAL!
    echo "[INFO] Attempt to use RCLONE"
-   check_env RCLONE_REMOTE_STORAGE $rclone_error
+   check_env RCLONE_REMOTE_PATH $rclone_error
    [[ ! -v RCLONE_MOUNT_POINT || -z "${RCLONE_MOUNT_POINT}" ]] && RCLONE_MOUNT_POINT="/mnt/rclone"
    # check if local mount point exists
    if [ ! -d "$RCLONE_MOUNT_POINT" ]; then
       mkdir -p $RCLONE_MOUNT_POINT
    fi
-   cmd="rclone mount --vfs-cache-mode full $RCLONE_REMOTE_STORAGE $RCLONE_MOUNT_POINT"
+   cmd="rclone mount --vfs-cache-mode full $RCLONE_REMOTE_PATH $RCLONE_MOUNT_POINT"
    echo "[RCLONE] $cmd"
    $cmd &
    rclone_pid=$!
