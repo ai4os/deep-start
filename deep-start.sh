@@ -226,7 +226,7 @@ fi
 if [ "$use_deepaas" = true ]; then
    echo "[INFO] Attempt to start DEEPaaS"
    DEEPaaS_PORT=5000
-   [[ "$gpu_mode" = true ]] && DEEPaaS_PORT=$PORT0
+   [[ "$gpu_mode" = true && -v PORT0 ]] && DEEPaaS_PORT=$PORT0
    cmd="deepaas-run --openwhisk-detect --listen-ip=0.0.0.0 --listen-port=$DEEPaaS_PORT"
    echo "[DEEPaaS] $cmd"
    $cmd
@@ -236,7 +236,7 @@ fi
 if [ "$use_jupyter" = true ]; then
    echo "[INFO] Attempt to start JupyterLab"
    Jupyter_PORT=8888
-   [[ "$gpu_mode" = true ]] && Jupyter_PORT=$PORT2
+   [[ "$gpu_mode" = true && -v PORT2 ]] && Jupyter_PORT=$PORT2
    cmd="/srv/.deep-start/run_jupyter.sh --allow-root"
    echo "[Jupyter] jupyterPORT=$Jupyter_PORT, $cmd"
    export jupyterPORT=$Jupyter_PORT
