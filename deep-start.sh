@@ -33,7 +33,7 @@ function usage()
     -g|--gpu \t\t force GPU execution mode (otherwise detected automatically)
     -d|--deepaas \t start deepaas-run
     -j|--jupyter \t start JupyterLab, if installed
-    -o|--onedata \t mount remote storage usinge oneclient
+    -o|--onedata \t mount remote storage using oneclient
     -r|--rclone  \t mount remote storage with rclone (experimental!)
     NOTE: if you try to start deepaas AND jupyterlab, only deepaas will start!" 1>&2; exit 0; 
 }

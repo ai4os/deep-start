@@ -1,13 +1,13 @@
 Start script(s) for DEEP containers
 ==================================
 
-deep-start.sh
--------------
+deep-start
+-----------
 
 **Main start script** for DEEP containers. Automatically detects if NVIDIA-GPU is present in the system.
-Default start is equivalent to ``deep-start.sh -d``.
+Default start is equivalent to ``deep-start -d``.
 
-Usage: deep-start.sh <options> 
+Usage: deep-start <options> 
 
     Options:
     -h|--help 		 the help message
@@ -15,10 +15,10 @@ Usage: deep-start.sh <options>
     -g|--gpu 		 force GPU execution mode  (otherwise detected automatically)
     -d|--deepaas 	 start deepaas-run
     -j|--jupyter 	 start JupyterLab, if installed
-    -o|--onedata 	 mount remote storage usinge oneclient
+    -o|--onedata 	 mount remote storage using oneclient
     -r|--rclone  	 mount remote storage with rclone (experimental!)
 
-NOTE: if you try to start deepaas AND jupyterlab, only deepaas will start!
+NOTE: if you try to start deepaas-run AND jupyterlab, only deepaas-run will start!
 
 run_jupyter.sh
 --------------
