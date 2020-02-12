@@ -20,8 +20,11 @@
 # NOTE: if you try to start deepaas AND jupyterlab, only deepaas will start!
 ###
 
-
 debug_it=true
+
+# Script full path
+# https://unix.stackexchange.com/questions/17499/get-path-of-current-script-when-executed-through-a-symlink/17500
+SCRIPT_PATH="$(dirname "$(readlink -f "$0")")"
 
 function usage()
 {
@@ -237,7 +240,7 @@ if [ "$use_jupyter" = true ]; then
    echo "[INFO] Attempt to start JupyterLab"
    Jupyter_PORT=8888
    [[ "$gpu_mode" = true && -v PORT2 ]] && Jupyter_PORT=$PORT2
-   cmd="/srv/.deep-start/run_jupyter.sh --allow-root"
+   cmd="${SCRIPT_PATH}/run_jupyter.sh --allow-root"
    echo "[Jupyter] jupyterPORT=$Jupyter_PORT, $cmd"
    export jupyterPORT=$Jupyter_PORT
    $cmd

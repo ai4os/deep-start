@@ -20,7 +20,8 @@
 ######
 
 # Script full path
-SCRIPT_PATH="$( cd $(dirname $0) ; pwd -P )"
+# https://unix.stackexchange.com/questions/17499/get-path-of-current-script-when-executed-through-a-symlink/17500
+SCRIPT_PATH="$(dirname "$(readlink -f "$0")")"
 
 if [[ ! -v jupyterOPTS ]]; then
     jupyterOPTS=""
@@ -43,7 +44,7 @@ if [[ ! -z "${jupyterCONFIG_URL}" ]]; then
 fi
 
 # mainly for debugging:
-echo "opts: $jupyterOPTS"
+echo "[run_jupyter] script_path: $SCRIPT_PATH, opts: $jupyterOPTS"
 
 # activate "Quit" button: do not do this, server shuts down!
 #jupyter lab --LabApp.quit_button=True $jupyterOPTS "$@"
