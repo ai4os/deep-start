@@ -18,6 +18,7 @@
 # -o|--onedata    - mount remote using oneclient
 # -r|--rclone     - mount remote with rclone (experimental!)
 # NOTE: if you try to start deepaas AND jupyterlab, only deepaas will start!
+# ports for DEEPaaS, Monitoring, JupyterLab are automatically set based on presence of GPU
 ###
 
 debug_it=true
@@ -230,6 +231,8 @@ if [ "$use_deepaas" = true ]; then
    echo "[INFO] Attempt to start DEEPaaS"
    DEEPaaS_PORT=5000
    [[ "$gpu_mode" = true && -v PORT0 ]] && DEEPaaS_PORT=$PORT0
+   export monitorPORT=6006
+   [[ "$gpu_mode" = true && -v PORT1 ]] && export monitorPORT=$PORT1
    cmd="deepaas-run --openwhisk-detect --listen-ip=0.0.0.0 --listen-port=$DEEPaaS_PORT"
    echo "[DEEPaaS] $cmd"
    $cmd
@@ -240,9 +243,11 @@ if [ "$use_jupyter" = true ]; then
    echo "[INFO] Attempt to start JupyterLab"
    Jupyter_PORT=8888
    [[ "$gpu_mode" = true && -v PORT2 ]] && Jupyter_PORT=$PORT2
+   export monitorPORT=6006
+   [[ "$gpu_mode" = true && -v PORT1 ]] && export monitorPORT=$PORT1
    cmd="${SCRIPT_PATH}/run_jupyter.sh --allow-root"
    echo "[Jupyter] jupyterPORT=$Jupyter_PORT, $cmd"
-   export jupyterPORT=$Jupyter_PORT
+   export jupyterPORT=$Jupyter_PORT  
    $cmd
    # we can't put process in the background, as the container will stop
 fi
