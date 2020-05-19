@@ -36,6 +36,7 @@ function usage()
     -c|--cpu \t\t force CPU-only execuition (otherwise detected automatically)
     -g|--gpu \t\t force GPU execution mode (otherwise detected automatically)
     -d|--deepaas \t start deepaas-run
+    -i|--install \t check that the full repo is installed
     -j|--jupyter \t start JupyterLab, if installed
     -o|--onedata \t mount remote storage using oneclient
     -r|--rclone  \t mount remote storage with rclone (experimental!)
@@ -46,6 +47,9 @@ function usage()
 cpu_mode=false
 gpu_mode=false
 use_deepaas=false
+check_install=false
+script_install_path="/srv/.deep-start"
+script_git_repo="https://github.com/deephdc/deep-start"
 use_jupyter=false
 use_rclone=false
 use_onedata=false
@@ -54,6 +58,7 @@ onedata_error="3"
 rclone_error="4"
 deepaas_error="5"
 jupyter_error="6"
+install_error="7"
 
 function check_nvidia()
 { # check if nvidia GPU is present
@@ -69,8 +74,8 @@ function check_nvidia()
 
 function check_arguments()
 {
-    OPTIONS=hcgdjor
-    LONGOPTS=help,cpu,gpu,deepaas,jupyter,onedata,rclone
+    OPTIONS=hcgdijor
+    LONGOPTS=help,cpu,gpu,deepaas,install,jupyter,onedata,rclone
     # https://stackoverflow.com/questions/192249/how-do-i-parse-command-line-arguments-in-bash
     # saner programming env: these switches turn some bugs into errors
     set -o errexit -o pipefail -o noclobber -o nounset
@@ -118,6 +123,10 @@ function check_arguments()
                 ;;
             -d|--deepaas)
                 use_deepaas=true
+                shift
+                ;;
+            -i|--install)
+                check_install=true
                 shift
                 ;;
             -j|--jupyter)
@@ -173,6 +182,33 @@ function check_env()
    fi   
 }
 
+function check_install()
+{
+   # function to check that jupyter scripts are installed
+
+   path=$1
+   jupyter_check_one=false
+   jupyter_check_two=false
+
+   if [[ -f "${path}/jupyter_notebook_config.py" && -d "${path}/lab" ]]; then
+      echo "[INFO] jupyter config and lab dir are found!"
+      jupyter_check_one=true
+   else
+      echo "[WARNING] Either jupyter config OR lab dir are NOT found in ${path}!"
+   fi
+
+   if [ -f "${path}/run_jupyter.sh" ]; then
+      echo "[INFO] run_jupyter.sh is found!"
+      jupyter_check_two=true
+   else
+      echo "[WARNING] run_jupyter.sh is NOT found in ${path}!"
+   fi
+
+   if [[ "$jupyter_check_one" = true && "$jupyter_check_two" = true ]]; then
+      script_installed=true
+   fi
+}
+
 check_nvidia
 check_arguments "$0" "$@"
 
@@ -186,6 +222,49 @@ fi
 [[ "$debug_it" = true ]] && echo "[DEBUG] cpu: '$cpu_mode', gpu: '$gpu_mode', \
 deepaas: '$use_deepaas', jupyter: '$use_jupyter', rclone: '$use_rclone', \
 onedata: '$use_onedata'"
+
+if [ "$check_install" = true ]; then
+   # check if corresponding jupyter scripts are installed
+   # either in a local directory or in the pre-defined path
+
+   # check them locally
+   script_installed=false
+   check_install "${SCRIPT_PATH}"
+   script_installed_loc=$script_installed
+
+   #.. or in the pre-defined path (reset script_installed!)
+   script_installed=false
+   check_install "${script_install_path}"
+   script_installed_pre=$script_installed
+
+   # if not installed in either path, force installation in the pre-defined path
+   if [[ "$script_installed_loc" = false &&  "$script_installed_pre" = false ]]; then
+      echo "[WARNING] deep-start scripts were NOT found!"
+      echo "          Installing from ${script_git_repo} in ${script_install_path}"
+      [[ ! -d $script_install_path ]] && mkdir -p "$script_install_path"
+      git clone "${script_git_repo}" "${script_install_path}"
+      [[ $? -ne 0 ]] && echo "[ERROR] Could not clone ${script_git_repo}" && exit $install_error
+      ln -f -s "${script_install_path}/deep-start" /usr/local/bin/deep-start
+   else
+     echo "[INFO] deep-start scripts found in:"
+     [[ "$script_installed_loc" = true ]] && echo "    * ${SCRIPT_PATH}" 
+     [[ "$script_installed_pre" = true ]] && echo "    * ${script_install_path}" 
+   fi
+   # if scripts are not installed locally, they are either
+   # already installed in pre-defined path or just installed by git clone
+   [[ "$script_installed_loc" = false ]] && SCRIPT_PATH=${script_install_path}
+
+   # if jupyter-lab is requested and not installed, install it
+   if [ "$use_jupyter" = true ]; then
+      # check if jupyter is installed
+      if command jupyter-lab --version 2>/dev/null; then
+         echo "[INFO] jupyterlab found!"
+      else
+         echo "[INFO] jupyterlab is NOT found! Trying to install.."
+         pip install jupyterlab
+      fi
+   fi
+fi
 
 if [ "$use_onedata" = true ]; then
    echo "[INFO] Attempt to use ONEDATA"
@@ -241,12 +320,22 @@ fi
 
 if [ "$use_jupyter" = true ]; then
    echo "[INFO] Attempt to start JupyterLab"
+
+   # check if JUPYTER_CONFIG_DIR is NOT set, set to ${SCRIPT_PATH}
+   [[ ! -v JUPYTER_CONFIG_DIR || -z "${JUPYTER_CONFIG_DIR}" ]] && JUPYTER_CONFIG_DIR="${SCRIPT_PATH}"
+
+   # check if jupyter_notebook_config.py exists
+   [[ ! -f "${JUPYTER_CONFIG_DIR}/jupyter_notebook_config.py" ]] && JUPYTER_CONFIG_DIR="${SCRIPT_PATH}"
+   export JUPYTER_CONFIG_DIR="${JUPYTER_CONFIG_DIR}"
+
    Jupyter_PORT=8888
    [[ "$gpu_mode" = true && -v PORT2 ]] && Jupyter_PORT=$PORT2
+
    export monitorPORT=6006
    [[ "$gpu_mode" = true && -v PORT1 ]] && export monitorPORT=$PORT1
+
    cmd="${SCRIPT_PATH}/run_jupyter.sh --allow-root"
-   echo "[Jupyter] jupyterPORT=$Jupyter_PORT, $cmd"
+   echo "[Jupyter] JUPYTER_CONFIG_DIR=${JUPYTER_CONFIG_DIR}, jupyterPORT=$Jupyter_PORT, $cmd"
    export jupyterPORT=$Jupyter_PORT  
    $cmd
    # we can't put process in the background, as the container will stop
