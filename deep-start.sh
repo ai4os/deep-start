@@ -190,11 +190,12 @@ function check_install()
    jupyter_check_one=false
    jupyter_check_two=false
 
-   if [[ -f "${path}/jupyter_notebook_config.py" && -d "${path}/lab" ]]; then
-      echo "[INFO] jupyter config and lab dir are found!"
+   # skip checking -d ${path}/lab, as this dir was introduced recently
+   if [ -f "${path}/jupyter_notebook_config.py" ]; then
+      echo "[INFO] jupyter_notebook_config.py is found!"
       jupyter_check_one=true
    else
-      echo "[WARNING] Either jupyter config OR lab dir are NOT found in ${path}!"
+      echo "[WARNING] jupyter_notebook_config.py is NOT found in ${path}!"
    fi
 
    if [ -f "${path}/run_jupyter.sh" ]; then
@@ -243,6 +244,7 @@ if [ "$check_install" = true ]; then
       echo "          Installing from ${script_git_repo} in ${script_install_path}"
       [[ ! -d $script_install_path ]] && mkdir -p "$script_install_path"
       git clone "${script_git_repo}" "${script_install_path}"
+      # ToDo: may need to PULL, not only CLONE! i.e. force update
       [[ $? -ne 0 ]] && echo "[ERROR] Could not clone ${script_git_repo}" && exit $install_error
       ln -f -s "${script_install_path}/deep-start" /usr/local/bin/deep-start
    else
