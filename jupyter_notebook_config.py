@@ -18,7 +18,15 @@
    BASED ON: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/tools/docker/jupyter_notebook_config.py
 """
 import os
-from IPython.lib import passwd
+from pkg_resources import get_distribution, parse_version
+
+# `passwd()` have been moved around in ipython>=8.0,
+# ref: https://stackoverflow.com/questions/72836985/ipython-passwd-not-able-to-import-with-new-2022-anaconda-download
+if parse_version(get_distribution('Ipython').version) < parse_version('8.0'):
+    from IPython.lib import passwd
+else:
+    from notebook.auth import passwd
+
 
 c = c # pylint:disable=undefined-variable
 c.NotebookApp.ip = '0.0.0.0'
