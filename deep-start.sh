@@ -52,6 +52,7 @@ use_deepaas=false
 force_install=false
 script_install_dir="/srv/.deep-start"
 script_git_repo="https://github.com/deephdc/deep-start"
+script_git_branch="vscode"
 use_jupyter=false
 use_rclone=false
 use_onedata=false
@@ -65,7 +66,10 @@ SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 # check if SCRIPT_DIR exists (not, if installed remotely?)
 # if not => define as script_install_dir
 [[ ! -d ${SCRIPT_DIR} ]] && SCRIPT_DIR=${script_install_dir}
+ROOTCA_KEY_PATH="${SCRIPT_DIR}/ssl/rootCA-key.pem"
+ROOTCA_CERT_PATH="${SCRIPT_DIR}/ssl/rootCA.pem"
 KEY_PATH="${SCRIPT_DIR}/ssl/key.pem"
+CSR_PATH="${SCRIPT_DIR}/ssl/csr.pem"
 CERT_PATH="${SCRIPT_DIR}/ssl/cert.pem"
 
 # errors
@@ -210,18 +214,42 @@ function create_self_cert()
 {
   # function to create self-signed certificate
   KEY_DIR=$(dirname ${KEY_PATH})
-  CERT_DIR=(dirname ${CERT_PATH})
+  CERT_DIR=$(dirname ${CERT_PATH})
 
   # check if directories for the key and cert exists
   [[ ! -d ${KEY_DIR} ]] && mkdir -p ${KEY_DIR}
   [[ ! -d ${CERT_DIR} ]] && mkdir -p ${CERT_DIR}
 
-  # create self-signed certificate
-  openssl req -x509 -newkey rsa:4096 \
--keyout ${KEY_PATH} \
--out ${CERT_PATH} -sha256 -days 365 \
--subj "/O=DEEP-HDC/OU=Development/CN=$HOSTNAME" -nodes -sha256
+  # use mkcert to create self-signed certificate:
+   if command mkcert --version 2>/dev/null; then
+      echo "[INFO] mkcert found!"
+   else
+      echo "[INFO] mkcert is NOT found! Trying to install.."
+      curl -JLO "https://dl.filippo.io/mkcert/latest?for=linux/amd64" &&\
+      chmod +x mkcert-v*-linux-amd64 && \
+      mv mkcert-v*-linux-amd64 /usr/local/bin/mkcert
+   fi
 
+  # create self-signed certificate
+  export CAROOT=${SCRIPT_DIR}/ssl
+  mkcert -key-file ${KEY_PATH} -cert-file ${CERT_PATH} $HOSTNAME localhost 127.0.0.1
+
+## something is missing :-(
+#   # Create Root Key
+#   openssl genrsa -out ${ROOTCA_KEY_PATH} 4096
+#   
+#   # Create and self sign the Root Certificate
+#   openssl req -x509 -new -nodes -key ${ROOTCA_KEY_PATH} -sha256 -days 365 -out ${ROOTCA_CERT_PATH} -subj "/C=EU/O=DEEP-HDC/OU=Development/CN=localhost"
+#
+#   # Create the signing (csr)
+#   openssl genrsa -out ${KEY_PATH} 2048
+#
+#   # Create the signing (csr)
+#   openssl req -new -sha256 -key ${KEY_PATH} -subj "/C=EU/O=DEEP-HDC/OU=Development/CN=localhost" -out ${CSR_PATH}
+#
+#   # Generate the certificate using the csr and key along with the CA Root key
+#   openssl x509 -req -in ${CSR_PATH} -CA ${ROOTCA_CERT_PATH} -CAkey ${ROOTCA_KEY_PATH} -CAcreateserial -out ${CERT_PATH} -days 365 -sha256
+##
 }
 
 check_nvidia
@@ -256,7 +284,7 @@ if [ "$force_install" = true ]; then
    # re-create the directory
    [[ ! -d $script_install_dir ]] && (mkdir -p "$script_install_dir" && cd /srv)
    # clone the most recent version into the directory
-   git clone --depth 1 "${script_git_repo}" "${script_install_dir}"
+   git clone --depth 1 -b ${script_git_branch} "${script_git_repo}" "${script_install_dir}"
    [[ $? -ne 0 ]] && echo "[ERROR] Could not clone ${script_git_repo}" && exit $install_error
    ln -f -s "${script_install_dir}/deep-start" /usr/local/bin/deep-start
 fi
