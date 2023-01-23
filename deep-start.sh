@@ -233,23 +233,6 @@ function create_self_cert()
   # create self-signed certificate
   export CAROOT=${SCRIPT_DIR}/ssl
   mkcert -key-file ${KEY_PATH} -cert-file ${CERT_PATH} $HOSTNAME localhost 127.0.0.1
-
-## something is missing :-(
-#   # Create Root Key
-#   openssl genrsa -out ${ROOTCA_KEY_PATH} 4096
-#   
-#   # Create and self sign the Root Certificate
-#   openssl req -x509 -new -nodes -key ${ROOTCA_KEY_PATH} -sha256 -days 365 -out ${ROOTCA_CERT_PATH} -subj "/C=EU/O=DEEP-HDC/OU=Development/CN=localhost"
-#
-#   # Create the signing (csr)
-#   openssl genrsa -out ${KEY_PATH} 2048
-#
-#   # Create the signing (csr)
-#   openssl req -new -sha256 -key ${KEY_PATH} -subj "/C=EU/O=DEEP-HDC/OU=Development/CN=localhost" -out ${CSR_PATH}
-#
-#   # Generate the certificate using the csr and key along with the CA Root key
-#   openssl x509 -req -in ${CSR_PATH} -CA ${ROOTCA_CERT_PATH} -CAkey ${ROOTCA_KEY_PATH} -CAcreateserial -out ${CERT_PATH} -days 365 -sha256
-##
 }
 
 check_nvidia
@@ -366,14 +349,19 @@ if [ "$use_jupyter" = true ]; then
    export monitorPORT=6006
    [[ "$gpu_mode" = true && -v PORT1 ]] && export monitorPORT=$PORT1
 
-   # add self-signed certificates for secure connection, if do not exist
-   [[ ! -f "${KEY_PATH}" && ! -f "${CERT_PATH}" ]] && create_self_cert
-   jupyterCERT=" --keyfile=$KEY_PATH --certfile=$CERT_PATH"
+   ### disable self-signed CERTs in this version
+   ## add self-signed certificates for secure connection, if do not exist
+   #[[ ! -f "${KEY_PATH}" && ! -f "${CERT_PATH}" ]] && create_self_cert
+   #jupyterCERT=" --keyfile=$KEY_PATH --certfile=$CERT_PATH"
+   ###
 
    # if jupyterOPTS env not set, create it empty
    [[ ! -v jupyterOPTS ]] && jupyterOPTS=""
  
-   cmd="jupyter lab $jupyterOPTS $jupyterCERT --allow-root"
+   ### disable self-signed CERTs in this version
+   #cmd="jupyter lab $jupyterOPTS $jupyterCERT --allow-root"
+   ###
+   cmd="jupyter lab $jupyterOPTS --allow-root"
    echo "[Jupyter] JUPYTER_CONFIG_DIR=${JUPYTER_CONFIG_DIR}, jupyterPORT=$Jupyter_PORT, $cmd"
    export jupyterPORT=$Jupyter_PORT  
    $cmd
@@ -398,8 +386,10 @@ if [ "$use_vscode" = true ]; then
    export monitorPORT=6006
    [[ "$gpu_mode" = true && -v PORT1 ]] && export monitorPORT=$PORT1
 
+   ## disable self-signed CERTs in this version
    # add self-signed certificates for secure connection, if do not exist
-   [[ ! -f "${KEY_PATH}" && ! -f "${CERT_PATH}" ]] && create_self_cert
+   #[[ ! -f "${KEY_PATH}" && ! -f "${CERT_PATH}" ]] && create_self_cert
+   ##
 
    # currently we setup jupyterPASSWORD while deploying
    [[ ! -v PASSWORD ]] && export PASSWORD=$jupyterPASSWORD
@@ -407,7 +397,10 @@ if [ "$use_vscode" = true ]; then
    vscode_workspace_file="srv.code-workspace"
    [[ ! -f "$vscode_workspace_file" ]] && (cp ${SCRIPT_DIR}/vscode/$vscode_workspace_file $vscode_workspace_file)
 
-   cmd="code-server --disable-telemetry --port $VSCode_PORT --user-data-dir=${SCRIPT_DIR}/vscode/code-server/ --cert ${CERT_PATH} --cert-key ${KEY_PATH}"
+   ## disable self-signed CERTs in this version
+   #cmd="code-server --disable-telemetry --port $VSCode_PORT --user-data-dir=${SCRIPT_DIR}/vscode/code-server/ --cert ${CERT_PATH} --cert-key ${KEY_PATH}"
+   ##
+   cmd="code-server --disable-telemetry --port $VSCode_PORT --user-data-dir=${SCRIPT_DIR}/vscode/code-server/"
    echo "[VSCode] PORT=$VSCode_PORT, $cmd"
    export jupyterPORT=$VSCode_PORT
    $cmd
