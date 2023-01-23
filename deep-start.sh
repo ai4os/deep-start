@@ -14,22 +14,17 @@
 # -c|--cpu - force container on CPU only  (otherwise detected automatically)
 # -g|--gpu - force GPU-related parameters (otherwise detected automatically)
 # -d|--deepaas    - start deepaas-run
+# -i|--install    - check that the full repo is installed
 # -j|--jupyterlab - start jupyterlab
 # -o|--onedata    - mount remote using oneclient
-# -r|--rclone     - mount remote with rclone (experimental!)
+# -r|--rclone     - mount remote with rclone (experimental!) (comment this out for now!)
 # -s|--vscode     - start VSCode (code-server)
 # NOTE: if you try to start deepaas AND jupyterlab, only deepaas will start!
 # ports for DEEPaaS, Monitoring, JupyterLab are automatically set based on presence of GPU
 ###
 
-debug_it=true
-
-# Script full path
-# https://unix.stackexchange.com/questions/17499/get-path-of-current-script-when-executed-through-a-symlink/17500
-SCRIPT_PATH="$(dirname "$(readlink -f "$0")")"
-KEY_PATH="${SCRIPT_PATH}/ssl/key.pem"
-CERT_PATH="${SCRIPT_PATH}/ssl/cert.pem"
-
+# For AI4EOSC and iMagine, we change version to 2.
+VERSION=2.0.0
 
 function usage()
 {
@@ -40,26 +35,40 @@ function usage()
     -c|--cpu \t\t force CPU-only execuition (otherwise detected automatically)
     -g|--gpu \t\t force GPU execution mode (otherwise detected automatically)
     -d|--deepaas \t start deepaas-run
-    -i|--install \t check that the full repo is installed
+    -i|--install \t enforce that the full repo is installed
     -j|--jupyter \t start JupyterLab, if installed
     -o|--onedata \t mount remote storage using oneclient
-    -r|--rclone  \t mount remote storage with rclone (experimental!)
     -s|--vscode  \t start VSCode (code-server), if installed
+    -v|--version \t print script version and exit
     NOTE: if you try to start deepaas AND jupyterlab or vscode, only deepaas will start!" 1>&2; exit 0; 
+# Comment possible RCLONE option. Leave it as "undocumented"
+#    -r|--rclone  \t mount remote storage with rclone (experimental!)
 }
 
 # define flags
 cpu_mode=false
 gpu_mode=false
 use_deepaas=false
-check_install=false
-script_install_path="/srv/.deep-start"
+force_install=false
+script_install_dir="/srv/.deep-start"
 script_git_repo="https://github.com/deephdc/deep-start"
 use_jupyter=false
 use_rclone=false
 use_onedata=false
 use_vscode=false
 
+debug_it=true
+
+# Script full path
+# https://unix.stackexchange.com/questions/17499/get-path-of-current-script-when-executed-through-a-symlink/17500
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+# check if SCRIPT_DIR exists (not, if installed remotely?)
+# if not => define as script_install_dir
+[[ ! -d ${SCRIPT_DIR} ]] && SCRIPT_DIR=${script_install_dir}
+KEY_PATH="${SCRIPT_DIR}/ssl/key.pem"
+CERT_PATH="${SCRIPT_DIR}/ssl/cert.pem"
+
+# errors
 onedata_error="2"
 rclone_error="2"
 deepaas_error="2"
@@ -80,8 +89,8 @@ function check_nvidia()
 
 function check_arguments()
 {
-    OPTIONS=hcgdijors
-    LONGOPTS=help,cpu,gpu,deepaas,install,jupyter,onedata,rclone,vscode
+    OPTIONS=hcgdijorsv
+    LONGOPTS=help,cpu,gpu,deepaas,install,jupyter,onedata,rclone,vscode,version
     # https://stackoverflow.com/questions/192249/how-do-i-parse-command-line-arguments-in-bash
     # saner programming env: these switches turn some bugs into errors
     set -o errexit -o pipefail -o noclobber -o nounset
@@ -132,24 +141,29 @@ function check_arguments()
                 shift
                 ;;
             -i|--install)
-                check_install=true
+                force_install=true
                 shift
                 ;;
             -j|--jupyter)
                 use_jupyter=true
                 shift
                 ;;
-            -r|--rclone)
-                use_rclone=true
-                shift
-                ;;
             -o|--onedata)
                 use_onedata=true
+                shift
+                ;;
+            -r|--rclone)
+                use_rclone=true
                 shift
                 ;;
             -s|--vscode)
                 use_vscode=true
                 shift
+                ;;
+            -v|--version)
+                echo $0
+                echo "Version of the script: $VERSION"
+                exit 0
                 ;;
             --)
                 shift
@@ -192,37 +206,17 @@ function check_env()
    fi   
 }
 
-function check_install()
-{
-   # function to check that jupyter scripts are installed
-
-   path=$1
-   jupyter_check_one=false
-   jupyter_check_two=false
-
-   # skip checking -d ${path}/lab, as this dir was introduced recently
-   if [ -f "${path}/jupyter_notebook_config.py" ]; then
-      echo "[INFO] jupyter_notebook_config.py is found!"
-      jupyter_check_one=true
-   else
-      echo "[WARNING] jupyter_notebook_config.py is NOT found in ${path}!"
-   fi
-
-   if [ -f "${path}/run_jupyter.sh" ]; then
-      echo "[INFO] run_jupyter.sh is found!"
-      jupyter_check_two=true
-   else
-      echo "[WARNING] run_jupyter.sh is NOT found in ${path}!"
-   fi
-
-   if [[ "$jupyter_check_one" = true && "$jupyter_check_two" = true ]]; then
-      script_installed=true
-   fi
-}
-
 function create_self_cert()
 {
   # function to create self-signed certificate
+  KEY_DIR=$(dirname ${KEY_PATH})
+  CERT_DIR=(dirname ${CERT_PATH})
+
+  # check if directories for the key and cert exists
+  [[ ! -d ${KEY_DIR} ]] && mkdir -p ${KEY_DIR}
+  [[ ! -d ${CERT_DIR} ]] && mkdir -p ${CERT_DIR}
+
+  # create self-signed certificate
   openssl req -x509 -newkey rsa:4096 \
 -keyout ${KEY_PATH} \
 -out ${CERT_PATH} -sha256 -days 365 \
@@ -251,48 +245,20 @@ fi
 deepaas: '$use_deepaas', jupyter: '$use_jupyter', rclone: '$use_rclone', \
 onedata: '$use_onedata', vscode: '$use_vscode'"
 
-if [ "$check_install" = true ]; then
-   # check if corresponding jupyter scripts are installed
-   # either in a local directory or in the pre-defined path
+if [ "$force_install" = true ]; then
+   # force installation of deep-start scripts (more recent version from github)
 
-   # check them locally
-   script_installed=false
-   check_install "${SCRIPT_PATH}"
-   script_installed_loc=$script_installed
-
-   #.. or in the pre-defined path (reset script_installed!)
-   script_installed=false
-   check_install "${script_install_path}"
-   script_installed_pre=$script_installed
-
-   # if not installed in either path, force installation in the pre-defined path
-   if [[ "$script_installed_loc" = false &&  "$script_installed_pre" = false ]]; then
-      echo "[WARNING] deep-start scripts were NOT found!"
-      echo "          Installing from ${script_git_repo} in ${script_install_path}"
-      [[ ! -d $script_install_path ]] && mkdir -p "$script_install_path"
-      git clone "${script_git_repo}" "${script_install_path}"
-      # ToDo: may need to PULL, not only CLONE! i.e. force update
-      [[ $? -ne 0 ]] && echo "[ERROR] Could not clone ${script_git_repo}" && exit $install_error
-      ln -f -s "${script_install_path}/deep-start" /usr/local/bin/deep-start
-   else
-     echo "[INFO] deep-start scripts found in:"
-     [[ "$script_installed_loc" = true ]] && echo "    * ${SCRIPT_PATH}" 
-     [[ "$script_installed_pre" = true ]] && echo "    * ${script_install_path}" 
-   fi
-   # if scripts are not installed locally, they are either
-   # already installed in pre-defined path or just installed by git clone
-   [[ "$script_installed_loc" = false ]] && SCRIPT_PATH=${script_install_path}
-
-   # if jupyter-lab is requested and not installed, install it
-   if [ "$use_jupyter" = true ]; then
-      # check if jupyter is installed
-      if command jupyter-lab --version 2>/dev/null; then
-         echo "[INFO] jupyterlab found!"
-      else
-         echo "[INFO] jupyterlab is NOT found! Trying to install.."
-         pip3 install jupyterlab
-      fi
-   fi
+   echo "[WARNING] Force installation of the deep-start scripts from github!"
+   echo "          Installing from ${script_git_repo} in ${script_install_dir}"
+   # if directory exists and/or deep-start is found => delete them
+   [[ -d $script_install_dir ]] && (cd /srv && rm -rf "$script_install_dir")
+   [[ -f $(which deep-start) ]] && rm $(which deep-start)
+   # re-create the directory
+   [[ ! -d $script_install_dir ]] && (mkdir -p "$script_install_dir" && cd /srv)
+   # clone the most recent version into the directory
+   git clone --depth 1 "${script_git_repo}" "${script_install_dir}"
+   [[ $? -ne 0 ]] && echo "[ERROR] Could not clone ${script_git_repo}" && exit $install_error
+   ln -f -s "${script_install_dir}/deep-start" /usr/local/bin/deep-start
 fi
 
 if [ "$use_onedata" = true ]; then
@@ -350,11 +316,20 @@ fi
 if [ "$use_jupyter" = true ]; then
    echo "[INFO] Attempt to start JupyterLab"
 
-   # check if JUPYTER_CONFIG_DIR is NOT set, set to ${SCRIPT_PATH}
-   [[ ! -v JUPYTER_CONFIG_DIR || -z "${JUPYTER_CONFIG_DIR}" ]] && JUPYTER_CONFIG_DIR="${SCRIPT_PATH}"
+   # if jupyter-lab is requested and not installed, install it
+   # check if jupyter is installed
+   if command jupyter-lab --version 2>/dev/null; then
+      echo "[INFO] jupyterlab found!"
+   else
+      echo "[INFO] jupyterlab is NOT found! Trying to install.."
+      pip3 install jupyterlab
+   fi
+
+   # check if JUPYTER_CONFIG_DIR is NOT set, set to ${SCRIPT_DIR}
+   [[ ! -v JUPYTER_CONFIG_DIR || -z "${JUPYTER_CONFIG_DIR}" ]] && JUPYTER_CONFIG_DIR="${SCRIPT_DIR}"
 
    # check if jupyter_notebook_config.py exists
-   [[ ! -f "${JUPYTER_CONFIG_DIR}/jupyter_notebook_config.py" ]] && JUPYTER_CONFIG_DIR="${SCRIPT_PATH}"
+   [[ ! -f "${JUPYTER_CONFIG_DIR}/jupyter_notebook_config.py" ]] && JUPYTER_CONFIG_DIR="${SCRIPT_DIR}"
    export JUPYTER_CONFIG_DIR="${JUPYTER_CONFIG_DIR}"
 
    Jupyter_PORT=8888
@@ -380,6 +355,15 @@ fi
 if [ "$use_vscode" = true ]; then
    echo "[INFO] Attempt to start VSCode server"
 
+   # if code-server is requested and not installed, install it
+   # check if code-server is installed
+   if command code-server --version 2>/dev/null; then
+      echo "[INFO] code-server (VSCode) is found!"
+   else
+      echo "[INFO] code-server (VSCode) is NOT found! Trying to install.."
+      curl -fsSL https://code-server.dev/install.sh | sh
+   fi
+
    export VSCode_PORT=8888
    [[ "$gpu_mode" = true && -v PORT2 ]] && export VSCode_PORT=$PORT2
 
@@ -389,7 +373,13 @@ if [ "$use_vscode" = true ]; then
    # add self-signed certificates for secure connection, if do not exist
    [[ ! -f "${KEY_PATH}" && ! -f "${CERT_PATH}" ]] && create_self_cert
 
-   cmd="code-server --disable-telemetry --port $VSCode_PORT --user-data-dir=/srv/.deep-start/vscode/code-server/ --cert ${CERT_PATH} --cert-key ${KEY_PATH}"
+   # currently we setup jupyterPASSWORD while deploying
+   [[ ! -v PASSWORD ]] && export PASSWORD=$jupyterPASSWORD
+
+   vscode_workspace_file="srv.code-workspace"
+   [[ ! -f "$vscode_workspace_file" ]] && (cp ${SCRIPT_DIR}/vscode/$vscode_workspace_file $vscode_workspace_file)
+
+   cmd="code-server --disable-telemetry --port $VSCode_PORT --user-data-dir=${SCRIPT_DIR}/vscode/code-server/ --cert ${CERT_PATH} --cert-key ${KEY_PATH}"
    echo "[VSCode] PORT=$VSCode_PORT, $cmd"
    export jupyterPORT=$VSCode_PORT
    $cmd

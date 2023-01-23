@@ -1,5 +1,9 @@
 {
   "query": {
-    "workspace": "/srv/srv.code-workspace"
+    "folder": "/srv"
+  },
+  "update": {
+    "checked": 1674484408899,
+    "version": "4.9.1"
   }
 }
