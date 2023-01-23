@@ -17,6 +17,7 @@
 # -j|--jupyterlab - start jupyterlab
 # -o|--onedata    - mount remote using oneclient
 # -r|--rclone     - mount remote with rclone (experimental!)
+# -s|--vscode     - start VSCode (code-server)
 # NOTE: if you try to start deepaas AND jupyterlab, only deepaas will start!
 # ports for DEEPaaS, Monitoring, JupyterLab are automatically set based on presence of GPU
 ###
@@ -26,6 +27,9 @@ debug_it=true
 # Script full path
 # https://unix.stackexchange.com/questions/17499/get-path-of-current-script-when-executed-through-a-symlink/17500
 SCRIPT_PATH="$(dirname "$(readlink -f "$0")")"
+KEY_PATH="${SCRIPT_PATH}/ssl/key.pem"
+CERT_PATH="${SCRIPT_PATH}/ssl/cert.pem"
+
 
 function usage()
 {
@@ -40,7 +44,8 @@ function usage()
     -j|--jupyter \t start JupyterLab, if installed
     -o|--onedata \t mount remote storage using oneclient
     -r|--rclone  \t mount remote storage with rclone (experimental!)
-    NOTE: if you try to start deepaas AND jupyterlab, only deepaas will start!" 1>&2; exit 0; 
+    -s|--vscode  \t start VSCode (code-server), if installed
+    NOTE: if you try to start deepaas AND jupyterlab or vscode, only deepaas will start!" 1>&2; exit 0; 
 }
 
 # define flags
@@ -53,12 +58,13 @@ script_git_repo="https://github.com/deephdc/deep-start"
 use_jupyter=false
 use_rclone=false
 use_onedata=false
+use_vscode=false
 
-onedata_error="3"
-rclone_error="4"
-deepaas_error="5"
-jupyter_error="6"
-install_error="7"
+onedata_error="2"
+rclone_error="2"
+deepaas_error="2"
+jupyter_error="2"
+install_error="2"
 
 function check_nvidia()
 { # check if nvidia GPU is present
@@ -74,8 +80,8 @@ function check_nvidia()
 
 function check_arguments()
 {
-    OPTIONS=hcgdijor
-    LONGOPTS=help,cpu,gpu,deepaas,install,jupyter,onedata,rclone
+    OPTIONS=hcgdijors
+    LONGOPTS=help,cpu,gpu,deepaas,install,jupyter,onedata,rclone,vscode
     # https://stackoverflow.com/questions/192249/how-do-i-parse-command-line-arguments-in-bash
     # saner programming env: these switches turn some bugs into errors
     set -o errexit -o pipefail -o noclobber -o nounset
@@ -139,6 +145,10 @@ function check_arguments()
                 ;;
             -o|--onedata)
                 use_onedata=true
+                shift
+                ;;
+            -s|--vscode)
+                use_vscode=true
                 shift
                 ;;
             --)
@@ -210,6 +220,16 @@ function check_install()
    fi
 }
 
+function create_self_cert()
+{
+  # function to create self-signed certificate
+  openssl req -x509 -newkey rsa:4096 \
+-keyout ${KEY_PATH} \
+-out ${CERT_PATH} -sha256 -days 365 \
+-subj "/O=DEEP-HDC/OU=Development/CN=$HOSTNAME" -nodes -sha256
+
+}
+
 check_nvidia
 check_arguments "$0" "$@"
 
@@ -219,10 +239,17 @@ if [[ "$use_deepaas" = true && "$use_jupyter" = true ]]; then
    echo "[WARNING] You are trying to start DEEPaaS AND JupyterLab, only DEEPaaS will start!"
 fi
 
+# if you try to start deepaas AND vscode, only deepaas will start!
+if [[ "$use_deepaas" = true && "$use_vscode" = true ]]; then
+   use_vscode=false
+   echo "[WARNING] You are trying to start DEEPaaS AND VSCode, only DEEPaaS will start!"
+fi
+
+
 # debugging printout
 [[ "$debug_it" = true ]] && echo "[DEBUG] cpu: '$cpu_mode', gpu: '$gpu_mode', \
 deepaas: '$use_deepaas', jupyter: '$use_jupyter', rclone: '$use_rclone', \
-onedata: '$use_onedata'"
+onedata: '$use_onedata', vscode: '$use_vscode'"
 
 if [ "$check_install" = true ]; then
    # check if corresponding jupyter scripts are installed
@@ -263,7 +290,7 @@ if [ "$check_install" = true ]; then
          echo "[INFO] jupyterlab found!"
       else
          echo "[INFO] jupyterlab is NOT found! Trying to install.."
-         pip install jupyterlab
+         pip3 install jupyterlab
       fi
    fi
 fi
@@ -336,9 +363,35 @@ if [ "$use_jupyter" = true ]; then
    export monitorPORT=6006
    [[ "$gpu_mode" = true && -v PORT1 ]] && export monitorPORT=$PORT1
 
-   cmd="${SCRIPT_PATH}/run_jupyter.sh --allow-root"
+   # add self-signed certificates for secure connection, if do not exist
+   [[ ! -f "${KEY_PATH}" && ! -f "${CERT_PATH}" ]] && create_self_cert
+   jupyterCERT=" --keyfile=$KEY_PATH --certfile=$CERT_PATH"
+
+   # if jupyterOPTS env not set, create it empty
+   [[ ! -v jupyterOPTS ]] && jupyterOPTS=""
+ 
+   cmd="jupyter lab $jupyterOPTS $jupyterCERT --allow-root"
    echo "[Jupyter] JUPYTER_CONFIG_DIR=${JUPYTER_CONFIG_DIR}, jupyterPORT=$Jupyter_PORT, $cmd"
    export jupyterPORT=$Jupyter_PORT  
+   $cmd
+   # we can't put process in the background, as the container will stop
+fi
+
+if [ "$use_vscode" = true ]; then
+   echo "[INFO] Attempt to start VSCode server"
+
+   export VSCode_PORT=8888
+   [[ "$gpu_mode" = true && -v PORT2 ]] && export VSCode_PORT=$PORT2
+
+   export monitorPORT=6006
+   [[ "$gpu_mode" = true && -v PORT1 ]] && export monitorPORT=$PORT1
+
+   # add self-signed certificates for secure connection, if do not exist
+   [[ ! -f "${KEY_PATH}" && ! -f "${CERT_PATH}" ]] && create_self_cert
+
+   cmd="code-server --disable-telemetry --port $VSCode_PORT --user-data-dir=/srv/.deep-start/vscode/code-server/ --cert ${CERT_PATH} --cert-key ${KEY_PATH}"
+   echo "[VSCode] PORT=$VSCode_PORT, $cmd"
+   export jupyterPORT=$VSCode_PORT
    $cmd
    # we can't put process in the background, as the container will stop
 fi
