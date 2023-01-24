@@ -24,7 +24,7 @@
 ###
 
 # For AI4EOSC and iMagine, we change version to 2.
-VERSION=2.0.0
+VERSION=2.0.1
 
 function usage()
 {
@@ -270,6 +270,10 @@ if [ "$force_install" = true ]; then
    git clone --depth 1 -b ${script_git_branch} "${script_git_repo}" "${script_install_dir}"
    [[ $? -ne 0 ]] && echo "[ERROR] Could not clone ${script_git_repo}" && exit $install_error
    ln -f -s "${script_install_dir}/deep-start" /usr/local/bin/deep-start
+   # print the deep-start version
+   deep-start --version
+   # trying to execute itself after re-install but skipping new re-install
+   $(echo "$0" "$@" | sed 's/-i//g')
 fi
 
 if [ "$use_onedata" = true ]; then
@@ -398,7 +402,7 @@ if [ "$use_vscode" = true ]; then
    [[ ! -f "$vscode_workspace_file" ]] && (cp ${SCRIPT_DIR}/vscode/$vscode_workspace_file $vscode_workspace_file)
 
    ## disable self-signed CERTs in this version
-   #cmd="code-server --disable-telemetry --port $VSCode_PORT --user-data-dir=${SCRIPT_DIR}/vscode/code-server/ --cert ${CERT_PATH} --cert-key ${KEY_PATH}"
+   #cmd="code-server --disable-telemetry --host 0.0.0.0 --port $VSCode_PORT --user-data-dir=${SCRIPT_DIR}/vscode/code-server/ --cert ${CERT_PATH} --cert-key ${KEY_PATH}"
    ##
    cmd="code-server --disable-telemetry --host 0.0.0.0 --port $VSCode_PORT --user-data-dir=${SCRIPT_DIR}/vscode/code-server/"
    echo "[VSCode] PORT=$VSCode_PORT, $cmd"
