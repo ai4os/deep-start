@@ -400,7 +400,7 @@ if [ "$use_vscode" = true ]; then
    ## disable self-signed CERTs in this version
    #cmd="code-server --disable-telemetry --port $VSCode_PORT --user-data-dir=${SCRIPT_DIR}/vscode/code-server/ --cert ${CERT_PATH} --cert-key ${KEY_PATH}"
    ##
-   cmd="code-server --disable-telemetry --bind-addr 0.0.0.0:$VSCode_PORT --user-data-dir=${SCRIPT_DIR}/vscode/code-server/"
+   cmd="code-server --disable-telemetry --host 0.0.0.0 --port $VSCode_PORT --user-data-dir=${SCRIPT_DIR}/vscode/code-server/"
    echo "[VSCode] PORT=$VSCode_PORT, $cmd"
    export jupyterPORT=$VSCode_PORT
    $cmd
