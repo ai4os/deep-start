@@ -272,8 +272,11 @@ if [ "$force_install" = true ]; then
    ln -f -s "${script_install_dir}/deep-start" /usr/local/bin/deep-start
    # print the deep-start version
    deep-start --version
+   ## skip the following idea of "self-restart", 
+   ## one can execute e.g. "deep-start -i && deep-start -s"
+   ## or via docker cli : /bin/bash -c "deep-start -i && deep-start -s"
    # trying to execute itself after re-install but skipping new re-install
-   $(echo "$0" "$@" | sed 's/-i//g')
+   #$(echo "$0" "$@" | sed 's/-i//g')
 fi
 
 if [ "$use_onedata" = true ]; then
