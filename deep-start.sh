@@ -380,8 +380,8 @@ if [ "$use_vscode" = true ]; then
       curl -fsSL https://code-server.dev/install.sh | sh
    fi
 
-   export VSCode_PORT=8888
-   [[ "$gpu_mode" = true && -v PORT2 ]] && export VSCode_PORT=$PORT2
+   VSCode_PORT=8888
+   [[ "$gpu_mode" = true && -v PORT2 ]] && VSCode_PORT=$PORT2
 
    export monitorPORT=6006
    [[ "$gpu_mode" = true && -v PORT1 ]] && export monitorPORT=$PORT1
