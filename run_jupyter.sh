@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # This script allows to pass optional parameters during 
 # JupyterLab startup without changing the container command
+#
+# 2023: this script is going to be DEPRICATED!
+#
 
 if [[ ! -v jupyterOPTS ]]; then
     jupyterOPTS=""

@@ -14,11 +14,11 @@
 # -c|--cpu - force container on CPU only  (otherwise detected automatically)
 # -g|--gpu - force GPU-related parameters (otherwise detected automatically)
 # -d|--deepaas    - start deepaas-run
-# -i|--install    - check that the full repo is installed
-# -j|--jupyterlab - start jupyterlab
+# -i|--install    - enforce that the latest git repo of the script is installed
+# -j|--jupyterlab - start JupyterLab; if not installed, will be automatically installed
 # -o|--onedata    - mount remote using oneclient
 # -r|--rclone     - mount remote with rclone (experimental!) (comment this out for now!)
-# -s|--vscode     - start VSCode (code-server)
+# -s|--vscode     - start VSCode (code-server); if not installed, will be automatically installed
 # NOTE: if you try to start deepaas AND jupyterlab, only deepaas will start!
 # ports for DEEPaaS, Monitoring, JupyterLab are automatically set based on presence of GPU
 ###
@@ -35,10 +35,10 @@ function usage()
     -c|--cpu \t\t force CPU-only execuition (otherwise detected automatically)
     -g|--gpu \t\t force GPU execution mode (otherwise detected automatically)
     -d|--deepaas \t start deepaas-run
-    -i|--install \t enforce that the full repo is installed
-    -j|--jupyter \t start JupyterLab, if installed
+    -i|--install \t enforce that the latest git repo of the deep-start script is installed
+    -j|--jupyter \t start JupyterLab; if not installed, will be automatically installed
     -o|--onedata \t mount remote storage using oneclient
-    -s|--vscode  \t start VSCode (code-server), if installed
+    -s|--vscode  \t start VSCode (code-server); if not installed, will be automatically installed
     -v|--version \t print script version and exit
     NOTE: if you try to start deepaas AND jupyterlab or vscode, only deepaas will start!" 1>&2; exit 0; 
 # Comment possible RCLONE option. Leave it as "undocumented"
@@ -52,7 +52,7 @@ use_deepaas=false
 force_install=false
 script_install_dir="/srv/.deep-start"
 script_git_repo="https://github.com/deephdc/deep-start"
-script_git_branch="vscode"
+script_git_branch="master"
 use_jupyter=false
 use_rclone=false
 use_onedata=false

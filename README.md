@@ -4,7 +4,7 @@ Start script(s) for DEEP containers
 deep-start
 -----------
 
-**Main start script** for DEEP containers. Automatically detects if NVIDIA-GPU is present in the system.
+The **main start script** for DEEP containers. Automatically detects if NVIDIA-GPU is present in the system.
 Default start is equivalent to ``deep-start -d``.
 
 Usage: deep-start <options> 
@@ -14,16 +14,17 @@ Usage: deep-start <options>
     -c|--cpu 		 force CPU-only execuition (otherwise detected automatically)
     -g|--gpu 		 force GPU execution mode (otherwise detected automatically)
     -d|--deepaas 	 start deepaas-run
-    -i|--install 	 enforce that the full repo is installed
-    -j|--jupyter 	 start JupyterLab, if installed
+    -i|--install 	 enforce that the latest git repo of the deep-start script is installed
+    -j|--jupyter 	 start JupyterLab; if not installed, will be automatically installed
     -o|--onedata 	 mount remote storage using oneclient
-    -s|--vscode  	 start VSCode (code-server), if installed
+    -s|--vscode  	 start VSCode (code-server); if not installed, will be automatically installed
     -v|--version 	 print script version and exit
-NOTE: if you try to start deepaas-run AND jupyterlab, only deepaas-run will start!
+NOTE: if you try to start deepaas-run AND jupyterlab (or vscode), only deepaas-run will start!
 
 run_jupyter.sh
 --------------
-Script to start jupyterlab, also checks jupyterCONFIG_URL environment for more advanced configuration (e.g. download of certificates)
+** GOING TO BE DEPRICATED! KEPT FOR COMPATIBILITY. jupyter lab is started directly in the deep-start (as before, accepts jupyterOPTS for more options) **
+Script to start jupyterlab, also checks jupyterOPTS environment for more advanced configuration
 
 jupyter_notebook_config.py
 --------------------------
