@@ -24,7 +24,7 @@
 ###
 
 # For AI4EOSC and iMagine, we change version to 2.
-VERSION=2.0.1
+VERSION=2.0.2
 
 function usage()
 {
@@ -52,13 +52,14 @@ use_deepaas=false
 force_install=false
 script_install_dir="/srv/.deep-start"
 script_git_repo="https://github.com/deephdc/deep-start"
-script_git_branch="master"
+script_git_branch="vscode"
 use_jupyter=false
 use_rclone=false
 use_onedata=false
 use_vscode=false
 
 debug_it=true
+use_self_cert=true
 
 # Script full path
 # https://unix.stackexchange.com/questions/17499/get-path-of-current-script-when-executed-through-a-symlink/17500
@@ -206,8 +207,8 @@ function check_env()
       exit $error
    elif [[ -z "${!param}" ]]; then
       echo "[ERROR] $param is empty!"
-      exit $error      
-   fi   
+      exit $error
+   fi
 }
 
 function create_self_cert()
@@ -356,19 +357,18 @@ if [ "$use_jupyter" = true ]; then
    export monitorPORT=6006
    [[ "$gpu_mode" = true && -v PORT1 ]] && export monitorPORT=$PORT1
 
-   ### disable self-signed CERTs in this version
    ## add self-signed certificates for secure connection, if do not exist
-   #[[ ! -f "${KEY_PATH}" && ! -f "${CERT_PATH}" ]] && create_self_cert
-   #jupyterCERT=" --keyfile=$KEY_PATH --certfile=$CERT_PATH"
-   ###
+   if [ "$use_self_cert" = true ]; then
+      [[ ! -f "${KEY_PATH}" && ! -f "${CERT_PATH}" ]] && create_self_cert
+      Jupyter_CERTS=" --keyfile=$KEY_PATH --certfile=$CERT_PATH"
+   else
+      Jupyter_CERTS=""
+   fi
 
    # if jupyterOPTS env not set, create it empty
    [[ ! -v jupyterOPTS ]] && jupyterOPTS=""
  
-   ### disable self-signed CERTs in this version
-   #cmd="jupyter lab $jupyterOPTS $jupyterCERT --allow-root"
-   ###
-   cmd="jupyter lab $jupyterOPTS --allow-root"
+   cmd="jupyter lab $jupyterOPTS ${Jupyter_CERTS} --allow-root"
    echo "[Jupyter] JUPYTER_CONFIG_DIR=${JUPYTER_CONFIG_DIR}, jupyterPORT=$Jupyter_PORT, $cmd"
    export jupyterPORT=$Jupyter_PORT  
    $cmd
@@ -393,21 +393,21 @@ if [ "$use_vscode" = true ]; then
    export monitorPORT=6006
    [[ "$gpu_mode" = true && -v PORT1 ]] && export monitorPORT=$PORT1
 
-   ## disable self-signed CERTs in this version
    # add self-signed certificates for secure connection, if do not exist
-   #[[ ! -f "${KEY_PATH}" && ! -f "${CERT_PATH}" ]] && create_self_cert
-   ##
+   if [ "$use_self_cert" = true ]; then
+      [[ ! -f "${KEY_PATH}" && ! -f "${CERT_PATH}" ]] && create_self_cert
+      VSCode_CERTS=" --cert ${CERT_PATH} --cert-key ${KEY_PATH}"
+   else
+      VSCode_CERTS=""
+   fi
 
-   # currently we setup jupyterPASSWORD while deploying
+   # currently we setup "jupyterPASSWORD" while deploying
    [[ ! -v PASSWORD ]] && export PASSWORD=$jupyterPASSWORD
 
    vscode_workspace_file="srv.code-workspace"
    [[ ! -f "$vscode_workspace_file" ]] && (cp ${SCRIPT_DIR}/vscode/$vscode_workspace_file $vscode_workspace_file)
 
-   ## disable self-signed CERTs in this version
-   #cmd="code-server --disable-telemetry --host 0.0.0.0 --port $VSCode_PORT --user-data-dir=${SCRIPT_DIR}/vscode/code-server/ --cert ${CERT_PATH} --cert-key ${KEY_PATH}"
-   ##
-   cmd="code-server --disable-telemetry --host 0.0.0.0 --port $VSCode_PORT --user-data-dir=${SCRIPT_DIR}/vscode/code-server/"
+   cmd="code-server --disable-telemetry --host 0.0.0.0 --port $VSCode_PORT --user-data-dir=${SCRIPT_DIR}/vscode/code-server/ ${VSCode_CERTS}"
    echo "[VSCode] PORT=$VSCode_PORT, $cmd"
    export jupyterPORT=$VSCode_PORT
    $cmd
