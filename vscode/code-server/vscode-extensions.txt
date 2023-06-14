@@ -1,0 +1,10 @@
+# python + jupyter notebooks, https://open-vsx.org/extension/ms-python/python
+ms-python.python
+# gitlens, https://open-vsx.org/extension/eamodio/gitlens
+eamodio.gitlens
+# BetterComments, https://open-vsx.org/extension/aaron-bond/better-comments
+aaron-bond.better-comments
+# Prettier, https://open-vsx.org/extension/esbenp/prettier-vscode
+esbenp.prettier-vscode
+# autoDocstring, https://open-vsx.org/extension/njpwerner/autodocstring
+njpwerner.autodocstring
