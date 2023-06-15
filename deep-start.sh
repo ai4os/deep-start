@@ -38,7 +38,7 @@
 
 ### Define defaults
 # For AI4EOSC and iMagine, we change version to 2.
-VERSION=2.0.2
+VERSION=2.1.0
 
 ## Define defaults for flags
 cpu_mode=false
