@@ -2,7 +2,7 @@
 #
 # -*- coding: utf-8 -*-
 #
-# Copyright (c) 2018 - 2020 Karlsruhe Institute of Technology - Steinbuch Centre for Computing
+# Copyright (c) 2018 - 2023 Karlsruhe Institute of Technology - Steinbuch Centre for Computing
 # This code is distributed under the MIT License
 # Please, see the LICENSE file
 #
@@ -23,8 +23,71 @@
 # ports for DEEPaaS, Monitoring, JupyterLab are automatically set based on presence of GPU
 ###
 
+###
+# In the DEEP-HDC/AI4OS platform the following environment settings are available:
+# RCLONE_CONFIG
+# RCLONE_CONFIG_RSHARE_URL
+# RCLONE_CONFIG_RSHARE_VENDOR
+# RCLONE_CONFIG_RSHARE_USER
+# RCLONE_CONFIG_RSHARE_PASS
+# jupyterPASSWORD
+#
+# The script setups:
+# For JupyterLab, jupyter_notebook_config.py is used, which needs "jupyterPORT" environment
+# Some applications need "monitoring port" (e.g. TensorBoard), which is fixed to "monitorPORT" environment
+
+### Define defaults
 # For AI4EOSC and iMagine, we change version to 2.
-VERSION=2.0.1
+VERSION=2.0.2
+
+## Define defaults for flags
+cpu_mode=false
+gpu_mode=false
+use_deepaas=false
+force_install=false
+use_jupyter=false
+use_rclone=false
+use_onedata=false
+use_vscode=false
+
+debug_it=true
+
+## Paths
+script_install_dir="/srv/.deep-start"
+script_git_repo="https://github.com/deephdc/deep-start"
+script_git_branch="master"
+vscode_workspace_file="srv.code-workspace"
+vscode_extensions="vscode/code-server/vscode-extensions.txt"
+# Script full path
+# https://unix.stackexchange.com/questions/17499/get-path-of-current-script-when-executed-through-a-symlink/17500
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+# check if SCRIPT_DIR exists (not, if installed remotely?)
+# if not => define as script_install_dir
+[[ ! -d ${SCRIPT_DIR} ]] && SCRIPT_DIR=${script_install_dir}
+# check if IDE_KEY_PATH and CERT_PATH exist, if not => put some default values (SSL)
+[[ ! -v IDE_KEY_PATH ]] && IDE_KEY_PATH="${SCRIPT_DIR}/ssl/key.pem"
+[[ ! -v IDE_CERT_PATH ]] && IDE_CERT_PATH="${SCRIPT_DIR}/ssl/cert.pem"
+
+## Errors
+onedata_error="2"
+rclone_error="2"
+deepaas_error="2"
+jupyter_error="2"
+install_error="2"
+### end of defaults
+
+# function to check if nvidia GPU is present
+# has to be before check_arguments()
+function check_nvidia()
+{ if command nvidia-smi 2>/dev/null; then
+    echo "[INFO] NVIDIA is present"
+    cpu_mode=false
+    gpu_mode=true
+  else
+    cpu_mode=true
+    gpu_mode=false
+  fi
+}
 
 function usage()
 {
@@ -43,52 +106,6 @@ function usage()
     NOTE: if you try to start deepaas AND jupyterlab or vscode, only deepaas will start!" 1>&2; exit 0; 
 # Comment possible RCLONE option. Leave it as "undocumented"
 #    -r|--rclone  \t mount remote storage with rclone (experimental!)
-}
-
-# define flags
-cpu_mode=false
-gpu_mode=false
-use_deepaas=false
-force_install=false
-script_install_dir="/srv/.deep-start"
-script_git_repo="https://github.com/deephdc/deep-start"
-script_git_branch="master"
-use_jupyter=false
-use_rclone=false
-use_onedata=false
-use_vscode=false
-
-debug_it=true
-
-# Script full path
-# https://unix.stackexchange.com/questions/17499/get-path-of-current-script-when-executed-through-a-symlink/17500
-SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
-# check if SCRIPT_DIR exists (not, if installed remotely?)
-# if not => define as script_install_dir
-[[ ! -d ${SCRIPT_DIR} ]] && SCRIPT_DIR=${script_install_dir}
-ROOTCA_KEY_PATH="${SCRIPT_DIR}/ssl/rootCA-key.pem"
-ROOTCA_CERT_PATH="${SCRIPT_DIR}/ssl/rootCA.pem"
-KEY_PATH="${SCRIPT_DIR}/ssl/key.pem"
-CSR_PATH="${SCRIPT_DIR}/ssl/csr.pem"
-CERT_PATH="${SCRIPT_DIR}/ssl/cert.pem"
-
-# errors
-onedata_error="2"
-rclone_error="2"
-deepaas_error="2"
-jupyter_error="2"
-install_error="2"
-
-function check_nvidia()
-{ # check if nvidia GPU is present
-  if command nvidia-smi 2>/dev/null; then
-    echo "[INFO] NVIDIA is present"
-    cpu_mode=false
-    gpu_mode=true
-  else
-    cpu_mode=true
-    gpu_mode=false
-  fi
 }
 
 function check_arguments()
@@ -210,33 +227,23 @@ function check_env()
    fi   
 }
 
-function create_self_cert()
-{
-  # function to create self-signed certificate
-  KEY_DIR=$(dirname ${KEY_PATH})
-  CERT_DIR=$(dirname ${CERT_PATH})
-
-  # check if directories for the key and cert exists
-  [[ ! -d ${KEY_DIR} ]] && mkdir -p ${KEY_DIR}
-  [[ ! -d ${CERT_DIR} ]] && mkdir -p ${CERT_DIR}
-
-  # use mkcert to create self-signed certificate:
-   if command mkcert --version 2>/dev/null; then
-      echo "[INFO] mkcert found!"
-   else
-      echo "[INFO] mkcert is NOT found! Trying to install.."
-      curl -JLO "https://dl.filippo.io/mkcert/latest?for=linux/amd64" &&\
-      chmod +x mkcert-v*-linux-amd64 && \
-      mv mkcert-v*-linux-amd64 /usr/local/bin/mkcert
-   fi
-
-  # create self-signed certificate
-  export CAROOT=${SCRIPT_DIR}/ssl
-  mkcert -key-file ${KEY_PATH} -cert-file ${CERT_PATH} $HOSTNAME localhost 127.0.0.1
-}
-
 check_nvidia
 check_arguments "$0" "$@"
+
+# set PORTs:
+# 1. deepaas port
+DEEPaaS_PORT=5000
+[[ "$gpu_mode" = true && -v PORT0 ]] && DEEPaaS_PORT=$PORT0
+
+# 2. need "monitoring port" for applications like TensorBoard
+Monitor_PORT=6006
+[[ "$gpu_mode" = true && -v PORT1 ]] && export Monitor_PORT=$PORT1
+export monitorPORT=$Monitor_PORT
+
+# 3. IDE port (e.g. JupyterLab or VSCode)
+IDE_PORT=8888
+[[ "$gpu_mode" = true && -v PORT2 ]] && IDE_PORT=$PORT2 
+
 
 # if you try to start deepaas AND jupyterlab, only deepaas will start!
 if [[ "$use_deepaas" = true && "$use_jupyter" = true ]]; then
@@ -250,14 +257,16 @@ if [[ "$use_deepaas" = true && "$use_vscode" = true ]]; then
    echo "[WARNING] You are trying to start DEEPaaS AND VSCode, only DEEPaaS will start!"
 fi
 
-
 # debugging printout
 [[ "$debug_it" = true ]] && echo "[DEBUG] cpu: '$cpu_mode', gpu: '$gpu_mode', \
 deepaas: '$use_deepaas', jupyter: '$use_jupyter', rclone: '$use_rclone', \
 onedata: '$use_onedata', vscode: '$use_vscode'"
 
 if [ "$force_install" = true ]; then
-   # force installation of deep-start scripts (more recent version from github)
+   # force installation of the deep-start script (most recent version from github)
+   # this can be used to update the script and then start certain service:
+   # one can execute e.g. "deep-start -i && deep-start -s"
+   # or via docker cli : /bin/bash -c "deep-start -i && deep-start -s"
 
    echo "[WARNING] Force installation of the deep-start scripts from github!"
    echo "          Installing from ${script_git_repo} in ${script_install_dir}"
@@ -272,14 +281,11 @@ if [ "$force_install" = true ]; then
    ln -f -s "${script_install_dir}/deep-start" /usr/local/bin/deep-start
    # print the deep-start version
    deep-start --version
-   ## skip the following idea of "self-restart", 
-   ## one can execute e.g. "deep-start -i && deep-start -s"
-   ## or via docker cli : /bin/bash -c "deep-start -i && deep-start -s"
-   # trying to execute itself after re-install but skipping new re-install
-   #$(echo "$0" "$@" | sed 's/-i//g')
 fi
 
 if [ "$use_onedata" = true ]; then
+   # Mount ONEDATA point
+   # Probably depricating in AI4OS
    echo "[INFO] Attempt to use ONEDATA"
    check_env ONECLIENT_ACCESS_TOKEN $onedata_error
    check_env ONECLIENT_PROVIDER_HOST $onedata_error
@@ -321,11 +327,9 @@ fi
 
 if [ "$use_deepaas" = true ]; then
    echo "[INFO] Attempt to start DEEPaaS"
-   DEEPaaS_PORT=5000
-   [[ "$gpu_mode" = true && -v PORT0 ]] && DEEPaaS_PORT=$PORT0
-   export monitorPORT=6006
-   [[ "$gpu_mode" = true && -v PORT1 ]] && export monitorPORT=$PORT1
-   cmd="deepaas-run --openwhisk-detect --listen-ip=0.0.0.0 --listen-port=$DEEPaaS_PORT"
+   
+   # Note: --openwhisk-detect is not needed in this case, and deprecated for removal
+   cmd="deepaas-run --listen-ip=0.0.0.0 --listen-port=$DEEPaaS_PORT"
    echo "[DEEPaaS] $cmd"
    $cmd
    # we can't put process in the background, as the container will stop
@@ -335,7 +339,7 @@ if [ "$use_jupyter" = true ]; then
    echo "[INFO] Attempt to start JupyterLab"
 
    # if jupyter-lab is requested and not installed, install it
-   # check if jupyter is installed
+   # check if jupyter-lab is installed
    if command jupyter-lab --version 2>/dev/null; then
       echo "[INFO] jupyterlab found!"
    else
@@ -350,27 +354,19 @@ if [ "$use_jupyter" = true ]; then
    [[ ! -f "${JUPYTER_CONFIG_DIR}/jupyter_notebook_config.py" ]] && JUPYTER_CONFIG_DIR="${SCRIPT_DIR}"
    export JUPYTER_CONFIG_DIR="${JUPYTER_CONFIG_DIR}"
 
-   Jupyter_PORT=8888
-   [[ "$gpu_mode" = true && -v PORT2 ]] && Jupyter_PORT=$PORT2
+   # add certificates if they exist
+   if [ -f "${IDE_KEY_PATH}" ] && [ -f "${IDE_CERT_PATH}" ]; then
+      jupyterCERT=" --keyfile=$IDE_KEY_PATH --certfile=$IDE_CERT_PATH"
+   else
+      jupyterCERT=""
+   fi
 
-   export monitorPORT=6006
-   [[ "$gpu_mode" = true && -v PORT1 ]] && export monitorPORT=$PORT1
-
-   ### disable self-signed CERTs in this version
-   ## add self-signed certificates for secure connection, if do not exist
-   #[[ ! -f "${KEY_PATH}" && ! -f "${CERT_PATH}" ]] && create_self_cert
-   #jupyterCERT=" --keyfile=$KEY_PATH --certfile=$CERT_PATH"
-   ###
-
-   # if jupyterOPTS env not set, create it empty
+   # if user-defined jupyterOPTS env not set, set to empty
    [[ ! -v jupyterOPTS ]] && jupyterOPTS=""
  
-   ### disable self-signed CERTs in this version
-   #cmd="jupyter lab $jupyterOPTS $jupyterCERT --allow-root"
-   ###
-   cmd="jupyter lab $jupyterOPTS --allow-root"
-   echo "[Jupyter] JUPYTER_CONFIG_DIR=${JUPYTER_CONFIG_DIR}, jupyterPORT=$Jupyter_PORT, $cmd"
-   export jupyterPORT=$Jupyter_PORT  
+   cmd="jupyter lab $jupyterOPTS $jupyterCERT"
+   echo "[Jupyter] JUPYTER_CONFIG_DIR=${JUPYTER_CONFIG_DIR}, jupyterPORT=$IDE_PORT, $cmd"
+   export jupyterPORT=$IDE_PORT
    $cmd
    # we can't put process in the background, as the container will stop
 fi
@@ -387,29 +383,35 @@ if [ "$use_vscode" = true ]; then
       curl -fsSL https://code-server.dev/install.sh | sh
    fi
 
-   VSCode_PORT=8888
-   [[ "$gpu_mode" = true && -v PORT2 ]] && VSCode_PORT=$PORT2
+   # add certificates if they exist
+   if [ -f "${IDE_KEY_PATH}" ] && [ -f "${IDE_CERT_PATH}" ]; then
+      vscodeCERT=" --cert-key ${IDE_KEY_PATH} --cert=${IDE_CERT_PATH}"
+   else
+      vscodeCERT=""
+   fi
 
-   export monitorPORT=6006
-   [[ "$gpu_mode" = true && -v PORT1 ]] && export monitorPORT=$PORT1
-
-   ## disable self-signed CERTs in this version
-   # add self-signed certificates for secure connection, if do not exist
-   #[[ ! -f "${KEY_PATH}" && ! -f "${CERT_PATH}" ]] && create_self_cert
-   ##
-
-   # currently we setup jupyterPASSWORD while deploying
+   # (work-around) currently we setup jupyterPASSWORD on the platform while deploying
    [[ ! -v PASSWORD ]] && export PASSWORD=$jupyterPASSWORD
 
-   vscode_workspace_file="srv.code-workspace"
+   # if there is no workspace file, put default one (not sure if needed...)
    [[ ! -f "$vscode_workspace_file" ]] && (cp ${SCRIPT_DIR}/vscode/$vscode_workspace_file $vscode_workspace_file)
 
-   ## disable self-signed CERTs in this version
-   #cmd="code-server --disable-telemetry --host 0.0.0.0 --port $VSCode_PORT --user-data-dir=${SCRIPT_DIR}/vscode/code-server/ --cert ${CERT_PATH} --cert-key ${KEY_PATH}"
-   ##
-   cmd="code-server --disable-telemetry --host 0.0.0.0 --port $VSCode_PORT --user-data-dir=${SCRIPT_DIR}/vscode/code-server/"
-   echo "[VSCode] PORT=$VSCode_PORT, $cmd"
-   export jupyterPORT=$VSCode_PORT
+   # install extensions from $vscode_extensions path (see top)
+   # https://stackoverflow.com/questions/8195950/reading-lines-in-a-file-and-avoiding-lines-with-with-bash
+   vscode_extensions=${SCRIPT_DIR}/${vscode_extensions}
+   if [ -f "$vscode_extensions" ]; then
+      # allow comments started with '#'
+      grep -v '^#' ${vscode_extensions} | while read -r wl
+      do
+      # skip empty lines
+         if [ ${#wl} -ge 5 ]; then
+            code-server --user-data-dir=${SCRIPT_DIR}/vscode/code-server/ --install-extension "${wl}" || continue
+         fi
+      done
+   fi
+
+   cmd="code-server --disable-telemetry --bind-addr 0.0.0.0:$IDE_PORT --user-data-dir=${SCRIPT_DIR}/vscode/code-server/ ${vscodeCERT}"
+   echo "[VSCode] PORT=$IDE_PORT, $cmd"
    $cmd
    # we can't put process in the background, as the container will stop
 fi

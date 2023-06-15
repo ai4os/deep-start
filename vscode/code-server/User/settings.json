@@ -1,3 +1,5 @@
 {
-    "workbench.colorTheme": "Default High Contrast"
+    "autoDocstring.docstringFormat": "sphinx",
+    "workbench.colorTheme": "Visual Studio Dark",
+    "notebook.lineNumbers": "on"
 }

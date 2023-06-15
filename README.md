@@ -24,14 +24,14 @@ NOTE: if you try to start deepaas-run AND jupyterlab (or vscode), only deepaas-r
 
 jupyter_notebook_config.py
 --------------------------
-Module to set Jupyter access password from the jupyterPASSWORD environment, if available.
-BASED ON: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/tools/docker/jupyter_notebook_config.py
+(and symlink jupyter_server_config.py)
 
-run_jupyter.sh (GOING TO BE DEPRECATED!)
---------------
-**KEPT FOR COMPATIBILITY. jupyter lab is started directly in the deep-start (as before, accepts jupyterOPTS for more options)**
-
-Script to start jupyterlab, also checks jupyterOPTS environment for more advanced configuration
+Module to set Jupyter access password from the jupyterPASSWORD environment, if available. Tested for jupyterlab v2,3,4.
+In addition it provides default settings for JupyterLab, e.g.:
+* --ip
+* --port
+* --no-browser
+* --allow-root
 
 (directory) lab
 ----------------
@@ -40,3 +40,10 @@ contains very basic configuration for Jupyter Lab
 (directory) vscode
 -------------------
 contains very basic configuration for VSCode
+
+* vscode/code-server/vscode-extensions.txt : list of default extensions installed for VSCode
+
+
+!! Depricated
+------------
+run_jupyter.sh : script to start jupyterlab =>> now deep-start starts jupyterlab directly
