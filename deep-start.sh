@@ -36,8 +36,58 @@
 # For JupyterLab, jupyter_notebook_config.py is used, which needs "jupyterPORT" environment
 # Some applications need "monitoring port" (e.g. TensorBoard), which is fixed to "monitorPORT" environment
 
+### Define defaults
 # For AI4EOSC and iMagine, we change version to 2.
 VERSION=2.0.2
+
+## Define defaults for flags
+cpu_mode=false
+gpu_mode=false
+use_deepaas=false
+force_install=false
+use_jupyter=false
+use_rclone=false
+use_onedata=false
+use_vscode=false
+
+debug_it=true
+
+## Paths
+script_install_dir="/srv/.deep-start"
+script_git_repo="https://github.com/deephdc/deep-start"
+script_git_branch="master"
+vscode_workspace_file="srv.code-workspace"
+vscode_extensions="vscode/code-server/vscode-extensions.txt"
+# Script full path
+# https://unix.stackexchange.com/questions/17499/get-path-of-current-script-when-executed-through-a-symlink/17500
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+# check if SCRIPT_DIR exists (not, if installed remotely?)
+# if not => define as script_install_dir
+[[ ! -d ${SCRIPT_DIR} ]] && SCRIPT_DIR=${script_install_dir}
+# check if IDE_KEY_PATH and CERT_PATH exist, if not => put some default values (SSL)
+[[ ! -v IDE_KEY_PATH ]] && IDE_KEY_PATH="${SCRIPT_DIR}/ssl/key.pem"
+[[ ! -v IDE_CERT_PATH ]] && IDE_CERT_PATH="${SCRIPT_DIR}/ssl/cert.pem"
+
+## Errors
+onedata_error="2"
+rclone_error="2"
+deepaas_error="2"
+jupyter_error="2"
+install_error="2"
+### end of defaults
+
+# function to check if nvidia GPU is present
+# has to be before check_arguments()
+function check_nvidia()
+{ if command nvidia-smi 2>/dev/null; then
+    echo "[INFO] NVIDIA is present"
+    cpu_mode=false
+    gpu_mode=true
+  else
+    cpu_mode=true
+    gpu_mode=false
+  fi
+}
 
 function usage()
 {
@@ -56,52 +106,6 @@ function usage()
     NOTE: if you try to start deepaas AND jupyterlab or vscode, only deepaas will start!" 1>&2; exit 0; 
 # Comment possible RCLONE option. Leave it as "undocumented"
 #    -r|--rclone  \t mount remote storage with rclone (experimental!)
-}
-
-# define flags
-cpu_mode=false
-gpu_mode=false
-use_deepaas=false
-force_install=false
-script_install_dir="/srv/.deep-start"
-script_git_repo="https://github.com/deephdc/deep-start"
-script_git_branch="master"
-vscode_workspace_file="srv.code-workspace"
-vscode_extensions="vscode/code-server/vscode-extensions.txt"
-use_jupyter=false
-use_rclone=false
-use_onedata=false
-use_vscode=false
-
-debug_it=true
-
-# Script full path
-# https://unix.stackexchange.com/questions/17499/get-path-of-current-script-when-executed-through-a-symlink/17500
-SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
-# check if SCRIPT_DIR exists (not, if installed remotely?)
-# if not => define as script_install_dir
-[[ ! -d ${SCRIPT_DIR} ]] && SCRIPT_DIR=${script_install_dir}
-# check if IDE_KEY_PATH and CERT_PATH exist, if not => put some default values (SSL)
-[[ ! -v IDE_KEY_PATH ]] && IDE_KEY_PATH="${SCRIPT_DIR}/ssl/key.pem"
-[[ ! -v IDE_CERT_PATH ]] && IDE_CERT_PATH="${SCRIPT_DIR}/ssl/cert.pem"
-
-# errors
-onedata_error="2"
-rclone_error="2"
-deepaas_error="2"
-jupyter_error="2"
-install_error="2"
-
-function check_nvidia()
-{ # check if nvidia GPU is present
-  if command nvidia-smi 2>/dev/null; then
-    echo "[INFO] NVIDIA is present"
-    cpu_mode=false
-    gpu_mode=true
-  else
-    cpu_mode=true
-    gpu_mode=false
-  fi
 }
 
 function check_arguments()
@@ -253,7 +257,6 @@ if [[ "$use_deepaas" = true && "$use_vscode" = true ]]; then
    echo "[WARNING] You are trying to start DEEPaaS AND VSCode, only DEEPaaS will start!"
 fi
 
-
 # debugging printout
 [[ "$debug_it" = true ]] && echo "[DEBUG] cpu: '$cpu_mode', gpu: '$gpu_mode', \
 deepaas: '$use_deepaas', jupyter: '$use_jupyter', rclone: '$use_rclone', \
@@ -352,7 +355,7 @@ if [ "$use_jupyter" = true ]; then
    export JUPYTER_CONFIG_DIR="${JUPYTER_CONFIG_DIR}"
 
    # add certificates if they exist
-   if [ -f "${IDE_KEY_PATH}" ] && [ -f "${IDE_CERT_PATH}" ]]; then
+   if [ -f "${IDE_KEY_PATH}" ] && [ -f "${IDE_CERT_PATH}" ]; then
       jupyterCERT=" --keyfile=$IDE_KEY_PATH --certfile=$IDE_CERT_PATH"
    else
       jupyterCERT=""
@@ -381,15 +384,16 @@ if [ "$use_vscode" = true ]; then
    fi
 
    # add certificates if they exist
-   if [ -f "${IDE_KEY_PATH}" ] && [ -f "${IDE_CERT_PATH}" ]]; then
+   if [ -f "${IDE_KEY_PATH}" ] && [ -f "${IDE_CERT_PATH}" ]; then
       vscodeCERT=" --cert-key ${IDE_KEY_PATH} --cert=${IDE_CERT_PATH}"
    else
       vscodeCERT=""
    fi
 
-   # (work-around) currently we setup jupyterPASSWORD while deploying
+   # (work-around) currently we setup jupyterPASSWORD on the platform while deploying
    [[ ! -v PASSWORD ]] && export PASSWORD=$jupyterPASSWORD
 
+   # if there is no workspace file, put default one (not sure if needed...)
    [[ ! -f "$vscode_workspace_file" ]] && (cp ${SCRIPT_DIR}/vscode/$vscode_workspace_file $vscode_workspace_file)
 
    # install extensions from $vscode_extensions path (see top)
