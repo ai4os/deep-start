@@ -6,5 +6,6 @@
 
     // Theme
     // The theme for the terminal.
-    "theme": "dark"
+    "theme": "dark",
+    "fontSize": 14
 }

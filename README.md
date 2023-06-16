@@ -1,10 +1,10 @@
-Start script(s) for DEEP containers
+Start script(s) for DEEP/AI4OS containers
 ==================================
 
 deep-start
 -----------
 
-The **main start script** for DEEP containers. Automatically detects if NVIDIA-GPU is present in the system.
+The **main start script** for DEEP/AI4OS containers. Automatically detects if NVIDIA-GPU is present in the system.
 Default start is equivalent to ``deep-start -d``.
 
 Usage: deep-start <options> 

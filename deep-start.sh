@@ -38,7 +38,7 @@
 
 ### Define defaults
 # For AI4EOSC and iMagine, we change version to 2.
-VERSION=2.1.0
+VERSION=2.1.1
 
 ## Define defaults for flags
 cpu_mode=false
@@ -67,6 +67,10 @@ SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 # check if IDE_KEY_PATH and CERT_PATH exist, if not => put some default values (SSL)
 [[ ! -v IDE_KEY_PATH ]] && IDE_KEY_PATH="${SCRIPT_DIR}/ssl/key.pem"
 [[ ! -v IDE_CERT_PATH ]] && IDE_CERT_PATH="${SCRIPT_DIR}/ssl/cert.pem"
+
+# !(work-around) currently we setup jupyterPASSWORD on the platform while deploying
+# the platform should provide more 'neutral' e.g. idePASSWORD
+[[ ! -v idePASSWORD ]] && idePASSWORD=$jupyterPASSWORD
 
 ## Errors
 onedata_error="2"
@@ -232,13 +236,13 @@ check_arguments "$0" "$@"
 
 # set PORTs:
 # 1. deepaas port
-DEEPaaS_PORT=5000
-[[ "$gpu_mode" = true && -v PORT0 ]] && DEEPaaS_PORT=$PORT0
+DEEPAAS_PORT=5000
+[[ "$gpu_mode" = true && -v PORT0 ]] && DEEPAAS_PORT=$PORT0
 
 # 2. need "monitoring port" for applications like TensorBoard
-Monitor_PORT=6006
-[[ "$gpu_mode" = true && -v PORT1 ]] && export Monitor_PORT=$PORT1
-export monitorPORT=$Monitor_PORT
+MONITOR_PORT=6006
+[[ "$gpu_mode" = true && -v PORT1 ]] && MONITOR_PORT=$PORT1
+export monitorPORT=$MONITOR_PORT
 
 # 3. IDE port (e.g. JupyterLab or VSCode)
 IDE_PORT=8888
@@ -329,7 +333,7 @@ if [ "$use_deepaas" = true ]; then
    echo "[INFO] Attempt to start DEEPaaS"
    
    # Note: --openwhisk-detect is not needed in this case, and deprecated for removal
-   cmd="deepaas-run --listen-ip=0.0.0.0 --listen-port=$DEEPaaS_PORT"
+   cmd="deepaas-run --listen-ip=0.0.0.0 --listen-port=$DEEPAAS_PORT"
    echo "[DEEPaaS] $cmd"
    $cmd
    # we can't put process in the background, as the container will stop
@@ -356,16 +360,18 @@ if [ "$use_jupyter" = true ]; then
 
    # add certificates if they exist
    if [ -f "${IDE_KEY_PATH}" ] && [ -f "${IDE_CERT_PATH}" ]; then
-      jupyterCERT=" --keyfile=$IDE_KEY_PATH --certfile=$IDE_CERT_PATH"
+      jupyter_certs=" --keyfile=$IDE_KEY_PATH --certfile=$IDE_CERT_PATH"
    else
-      jupyterCERT=""
+      jupyter_certs=""
    fi
 
    # if user-defined jupyterOPTS env not set, set to empty
    [[ ! -v jupyterOPTS ]] && jupyterOPTS=""
  
-   cmd="jupyter lab $jupyterOPTS $jupyterCERT"
+   cmd="jupyter lab $jupyterOPTS ${jupyter_certs}"
    echo "[Jupyter] JUPYTER_CONFIG_DIR=${JUPYTER_CONFIG_DIR}, jupyterPORT=$IDE_PORT, $cmd"
+   # jupyter_notebook_config.py checks for jupyterPASSWORD and jupyterPORT environment variable:
+   [[ ! -v jupyterPASSWORD ]] && export jupyterPASSWORD=$idePASSWORD
    export jupyterPORT=$IDE_PORT
    $cmd
    # we can't put process in the background, as the container will stop
@@ -385,13 +391,10 @@ if [ "$use_vscode" = true ]; then
 
    # add certificates if they exist
    if [ -f "${IDE_KEY_PATH}" ] && [ -f "${IDE_CERT_PATH}" ]; then
-      vscodeCERT=" --cert-key ${IDE_KEY_PATH} --cert=${IDE_CERT_PATH}"
+      vscode_certs=" --cert-key ${IDE_KEY_PATH} --cert=${IDE_CERT_PATH}"
    else
-      vscodeCERT=""
+      vscode_certs=""
    fi
-
-   # (work-around) currently we setup jupyterPASSWORD on the platform while deploying
-   [[ ! -v PASSWORD ]] && export PASSWORD=$jupyterPASSWORD
 
    # if there is no workspace file, put default one (not sure if needed...)
    [[ ! -f "$vscode_workspace_file" ]] && (cp ${SCRIPT_DIR}/vscode/$vscode_workspace_file $vscode_workspace_file)
@@ -410,7 +413,10 @@ if [ "$use_vscode" = true ]; then
       done
    fi
 
-   cmd="code-server --disable-telemetry --bind-addr 0.0.0.0:$IDE_PORT --user-data-dir=${SCRIPT_DIR}/vscode/code-server/ ${vscodeCERT}"
+   # code-server checks for PASSWORD environment variable
+   [[ ! -v PASSWORD ]] && export PASSWORD=$idePASSWORD
+
+   cmd="code-server --disable-telemetry --bind-addr 0.0.0.0:$IDE_PORT --user-data-dir=${SCRIPT_DIR}/vscode/code-server/ ${vscode_certs}"
    echo "[VSCode] PORT=$IDE_PORT, $cmd"
    $cmd
    # we can't put process in the background, as the container will stop

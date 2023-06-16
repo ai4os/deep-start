@@ -1,5 +1,6 @@
 {
     "autoDocstring.docstringFormat": "sphinx",
     "workbench.colorTheme": "Visual Studio Dark",
-    "notebook.lineNumbers": "on"
+    "notebook.lineNumbers": "on",
+    "terminal.integrated.gpuAcceleration": "off"
 }
