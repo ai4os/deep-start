@@ -38,7 +38,7 @@
 
 ### Define defaults
 # For AI4EOSC and iMagine, we change version to 2.
-VERSION=2.1.1
+VERSION=2.1.2
 
 ## Define defaults for flags
 cpu_mode=false
@@ -58,6 +58,9 @@ script_git_repo="https://github.com/deephdc/deep-start"
 script_git_branch="master"
 vscode_workspace_file="srv.code-workspace"
 vscode_extensions="vscode/code-server/vscode-extensions.txt"
+# !(work-around) some (old) images are using GLIBC2.27,
+# !(work-around) while recent code-server requires GLIBC2.28 at least
+vscode_for_glibc227="4.16.1"
 # Script full path
 # https://unix.stackexchange.com/questions/17499/get-path-of-current-script-when-executed-through-a-symlink/17500
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
@@ -92,6 +95,10 @@ function check_nvidia()
     gpu_mode=false
   fi
 }
+
+# function to compare versions (up to 3 versions)
+# https://stackoverflow.com/a/37939589
+function version { echo "$@" | awk -F. '{ printf("%d%03d%03d\n", $1,$2,$3); }'; }
 
 function usage()
 {
@@ -386,7 +393,17 @@ if [ "$use_vscode" = true ]; then
       echo "[INFO] code-server (VSCode) is found!"
    else
       echo "[INFO] code-server (VSCode) is NOT found! Trying to install.."
-      curl -fsSL https://code-server.dev/install.sh | sh
+      # !(work-around):
+      # ! Check if at least GLIBC=2.28, otherwise install fixed code-server version
+      # https://stackoverflow.com/a/30491726
+      GLIBC_VERSION=$(ldd --version | awk '/ldd/{print $NF}')
+      echo "[DEBUG] GLIBC_VERSION: $GLIBC_VERSION, $(version $GLIBC_VERSION), $(version "2.27")"
+      if [ $(version $GLIBC_VERSION) -ge $(version "2.28") ]; then
+         curl -fsSL https://code-server.dev/install.sh | sh
+      else
+         echo "[WARNING] GLIBC VERSION IS OLD, $GLIBC_VERSION. Installing code-server ${vscode_for_glibc227}!"
+         curl -fsSL https://code-server.dev/install.sh | sh -s -- --version ${vscode_for_glibc227}
+      fi
    fi
 
    # add certificates if they exist
