@@ -38,7 +38,7 @@
 
 ### Define defaults
 # For AI4EOSC and iMagine, we change version to 2.
-VERSION=2.1.2
+VERSION=2.1.3
 
 ## Define defaults for flags
 cpu_mode=false
@@ -54,10 +54,11 @@ debug_it=true
 
 ## Paths
 script_install_dir="/srv/.deep-start"
-script_git_repo="https://github.com/deephdc/deep-start"
+script_git_repo="https://github.com/ai4os/deep-start"
 script_git_branch="master"
 vscode_workspace_file="srv.code-workspace"
 vscode_extensions="vscode/code-server/vscode-extensions.txt"
+vscode_extensions_url="https://raw.githubusercontent.com/ai4os/deep-start/${script_git_branch}/${vscode_extensions}"
 # !(work-around) some (old) images are using GLIBC2.27,
 # !(work-around) while recent code-server requires GLIBC2.28 at least
 vscode_for_glibc227="4.16.1"
@@ -416,9 +417,15 @@ if [ "$use_vscode" = true ]; then
    # if there is no workspace file, put default one (not sure if needed...)
    [[ ! -f "$vscode_workspace_file" ]] && (cp ${SCRIPT_DIR}/vscode/$vscode_workspace_file $vscode_workspace_file)
 
-   # install extensions from $vscode_extensions path (see top)
+   # install vscode extensions
+   # try to load extensions from the remote file $vscode_extensions_url (see top)
+   # if failes, load extensions from the local file
    # https://stackoverflow.com/questions/8195950/reading-lines-in-a-file-and-avoiding-lines-with-with-bash
    vscode_extensions=${SCRIPT_DIR}/${vscode_extensions}
+   vscode_extensions_remote=${vscode_extensions}".remote"
+   curl -o $vscode_extensions_remote $vscode_extensions_url
+   [[ $? -eq 0 ]] && vscode_extensions=${vscode_extensions_remote}
+   echo "[INFO] For installing extensions using file: $vscode_extensions"
    if [ -f "$vscode_extensions" ]; then
       # allow comments started with '#'
       grep -v '^#' ${vscode_extensions} | while read -r wl
