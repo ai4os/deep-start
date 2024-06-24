@@ -41,7 +41,9 @@ contains very basic configuration for Jupyter Lab
 -------------------
 contains very basic configuration for VSCode
 
-* vscode/code-server/vscode-extensions.txt : list of default extensions installed for VSCode
+* `vscode/code-server/vscode-extensions.txt` : list of default extensions installed for VSCode
+
+During execution of `deep-start` a remotly located at github `vscode-extensions.txt` is probed to load.
 
 
 !! Depricated

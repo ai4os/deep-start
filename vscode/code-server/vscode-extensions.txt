@@ -16,10 +16,9 @@ aaron-bond.better-comments
 # autoDocstring, https://open-vsx.org/extension/njpwerner/autodocstring
 njpwerner.autodocstring
 
-# Tabnine AI Autocomplete, https://open-vsx.org/extension/TabNine/tabnine-vscode
-tabnine.tabnine-vscode
-
 ## more to consider:
+# Tabnine AI Autocomplete, https://open-vsx.org/extension/TabNine/tabnine-vscode
+#tabnine.tabnine-vscode
 # CodeTogether to live share your VSCode and coding sessions
 #genuitecllc.codetogether
 # Prettier, https://open-vsx.org/extension/esbenp/prettier-vscode
