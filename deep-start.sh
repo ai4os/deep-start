@@ -56,6 +56,7 @@ debug_it=true
 script_install_dir="/srv/.deep-start"
 script_git_repo="https://github.com/ai4os/deep-start"
 script_git_branch="master"
+jupyterlab_extensions="jupyterlab-git jupyterlab-github"
 vscode_workspace_file="srv.code-workspace"
 vscode_extensions="vscode/code-server/vscode-extensions.txt"
 vscode_extensions_url="https://raw.githubusercontent.com/ai4os/deep-start/${script_git_branch}/${vscode_extensions}"
@@ -357,6 +358,11 @@ if [ "$use_jupyter" = true ]; then
    else
       echo "[INFO] jupyterlab is NOT found! Trying to install.."
       pip3 install jupyterlab
+      # install jupyter-lab extensions
+      if [ -n "${jupyterlab_extensions-}" ]; then
+        echo "[INFO] Installing jupyterlab extensions..."
+        pip3 install $jupyterlab_extensions
+      fi
    fi
 
    # check if JUPYTER_CONFIG_DIR is NOT set, set to ${SCRIPT_DIR}
