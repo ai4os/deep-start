@@ -1,0 +1,14 @@
+name: Main Config
+version: 1.0.0
+schema: v1
+
+models:
+  - name: AI4EOSC LLM
+    provider: openai
+    model: AI4EOSC/default  # or manually select you model
+    apiKey: "sk-dummy-key"
+    apiBase: https://vllm.cloud.ai4eosc.eu/
+    roles:
+      - chat
+      - edit
+      - apply

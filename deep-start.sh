@@ -405,6 +405,9 @@ if [ "$use_vscode" = true ]; then
          echo "[WARNING] GLIBC VERSION IS OLD, $GLIBC_VERSION. Installing code-server ${vscode_for_glibc227}!"
          curl -fsSL https://code-server.dev/install.sh | sh -s -- --version ${vscode_for_glibc227}
       fi
+      # Clean up downloaded .deb installer files (~250MB)
+      find / -maxdepth 3 -name "code-server*.deb" -delete 2>/dev/null || true
+      rm -rf ${HOME}/.cache/code-server /tmp/*
    fi
 
    # add certificates if they exist
@@ -435,6 +438,13 @@ if [ "$use_vscode" = true ]; then
             code-server --user-data-dir=${SCRIPT_DIR}/vscode/code-server/ --install-extension "${wl}" || continue
          fi
       done
+   fi
+   
+   # Configure Continue.dev if extension is requested
+   if grep -v '^#' "$vscode_extensions" 2>/dev/null | grep -qi 'Continue.continue'; then
+      mkdir -p ${HOME}/.continue
+      cp ${SCRIPT_DIR}/continue/config.yaml ${HOME}/.continue/
+      echo "[INFO] Continue configuration copied to ${HOME}/.continue/"
    fi
 
    # code-server checks for PASSWORD environment variable
