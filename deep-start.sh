@@ -443,7 +443,13 @@ if [ "$use_vscode" = true ]; then
    # Configure Continue.dev if extension is requested
    if grep -v '^#' "$vscode_extensions" 2>/dev/null | grep -qi 'Continue.continue'; then
       mkdir -p ${HOME}/.continue
-      cp ${SCRIPT_DIR}/continue/config.yaml ${HOME}/.continue/
+      cp ${SCRIPT_DIR}/continue/config.yaml ${HOME}/.continue/config.yaml
+      # Update API key if provided via environment variable
+      if [ -n "${AI4EOSC_LLM_KEY:-}" ]; then
+         # Only replace apiKey on non-commented lines (skip lines starting with #)
+         sed -i '/^[[:space:]]*#/! s/apiKey: "[^"]*"/apiKey: "'"${AI4EOSC_LLM_KEY}"'"/' ${HOME}/.continue/config.yaml
+         echo "[INFO] Continue API key configured from environment"
+      fi
       echo "[INFO] Continue configuration copied to ${HOME}/.continue/"
    fi
 

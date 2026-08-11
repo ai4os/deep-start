@@ -3,7 +3,8 @@ version: 1.0.0
 schema: v1
 
 models:
-  - name: AI4EOSC LLM
+  # Default AI4EOSC model
+  - name: AI4EOSC LLM (Default)
     provider: openai
     model: AI4EOSC/default  # or manually select you model
     apiKey: "sk-dummy-key"
@@ -12,3 +13,13 @@ models:
       - chat
       - edit
       - apply
+# Example for more models
+#  - name: AI4EOSC LLM (Qwen3-14B)
+#    provider: openai
+#    model: AI4EOSC/Qwen3-14B  # or manually select you model
+#    apiKey: "sk-dummy-key"
+#    apiBase: https://vllm.cloud.ai4eosc.eu/
+#    roles:
+#      - chat
+#      - edit
+#      - apply
