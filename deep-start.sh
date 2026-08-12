@@ -260,20 +260,19 @@ function install_opencode() {
       echo "[INFO] OpenCode already installed!"
    else
       echo "[INFO] OpenCode not found! Installing..."
-      # Install using official install script
+      # Install using official install script, return 1 in case of error
       # Check GLIBC version to determine which OpenCode version to install
       GLIBC_VERSION=$(ldd --version | awk '/ldd/{print $NF}')
       if [[ $(version "$GLIBC_VERSION") -ge $(version "2.29") ]]; then
-         install_opencode_cmd="curl -fsSL https://opencode.ai/install | bash"
+         if ! curl -fsSL https://opencode.ai/install | bash; then
+            return 1
+         fi
       else
          echo "[WARNING] GLIBC version is $GLIBC_VERSION, which is less than 2.29. Installing OpenCode version ${opencode_for_old_glibc} instead."
-         install_opencode_cmd="curl -fsSL https://opencode.ai/install | bash -s -- --version ${opencode_for_old_glibc}"
+         if ! curl -fsSL https://opencode.ai/install | bash -s -- --version ${opencode_for_old_glibc}; then
+            return 1
+         fi
       fi
-   fi
-
-   # install opencode, return 1 in case of error
-   if ! $install_opencode_cmd; then
-        return 1
    fi
 
    if [ -z "${AI4EOSC_LLM_KEY:-}" ]; then
