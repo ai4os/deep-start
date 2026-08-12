@@ -16,7 +16,8 @@
 # -d|--deepaas    - start deepaas-run
 # -i|--install    - enforce that the latest git repo of the script is installed
 # -j|--jupyterlab - start JupyterLab; if not installed, will be automatically installed
-# -o|--onedata    - mount remote using oneclient
+# -o|--opencode   - start OpenCode; if not installed, will be automatically installed
+#    --onedata    - mount remote using oneclient
 # -r|--rclone     - mount remote with rclone (experimental!) (comment this out for now!)
 # -s|--vscode     - start VSCode (code-server); if not installed, will be automatically installed
 # NOTE: if you try to start deepaas AND jupyterlab, only deepaas will start!
@@ -37,8 +38,6 @@
 # Some applications need "monitoring port" (e.g. TensorBoard), which is fixed to "monitorPORT" environment
 
 ### Define defaults
-# For AI4EOSC and iMagine, we change version to 2.
-VERSION=2.1.3
 
 ## Define defaults for flags
 cpu_mode=false
@@ -47,6 +46,7 @@ use_deepaas=false
 force_install=false
 use_jupyter=false
 use_rclone=false
+use_opencode=false
 use_onedata=false
 use_vscode=false
 
@@ -59,15 +59,22 @@ script_git_branch="master"
 vscode_workspace_file="srv.code-workspace"
 vscode_extensions="vscode/code-server/vscode-extensions.txt"
 vscode_extensions_url="https://raw.githubusercontent.com/ai4os/deep-start/${script_git_branch}/${vscode_extensions}"
-# !(work-around) some (old) images are using GLIBC2.27,
+# !(work-around) some (old) images are using GLIBC2.27, or GLIBC2.28
 # !(work-around) while recent code-server requires GLIBC2.28 at least
+# !(work-around) opencode v1.14.49+ requires GLIBC2.29; pin older version for GLIBC < 2.29
 vscode_for_glibc227="4.16.1"
+opencode_for_old_glibc="1.14.48"
 # Script full path
 # https://unix.stackexchange.com/questions/17499/get-path-of-current-script-when-executed-through-a-symlink/17500
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 # check if SCRIPT_DIR exists (not, if installed remotely?)
 # if not => define as script_install_dir
 [[ ! -d ${SCRIPT_DIR} ]] && SCRIPT_DIR=${script_install_dir}
+
+# For AI4EOSC and iMagine, we change version to 2. The VERSION is read from the VERSION file.
+VERSION="2.2.0"
+[[ -f "${SCRIPT_DIR}/VERSION" ]] && VERSION=$(cat "${SCRIPT_DIR}/VERSION")
+
 # check if IDE_KEY_PATH and CERT_PATH exist, if not => put some default values (SSL)
 [[ ! -v IDE_KEY_PATH ]] && IDE_KEY_PATH="${SCRIPT_DIR}/ssl/key.pem"
 [[ ! -v IDE_CERT_PATH ]] && IDE_CERT_PATH="${SCRIPT_DIR}/ssl/cert.pem"
@@ -77,11 +84,13 @@ SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 [[ ! -v idePASSWORD ]] && idePASSWORD=$jupyterPASSWORD
 
 ## Errors
+deepaas_error="2"
+install_error="2"
+jupyter_error="2"
+opencode_error="2"
 onedata_error="2"
 rclone_error="2"
-deepaas_error="2"
-jupyter_error="2"
-install_error="2"
+vscode_error="2"
 ### end of defaults
 
 # function to check if nvidia GPU is present
@@ -112,7 +121,8 @@ function usage()
     -d|--deepaas \t start deepaas-run
     -i|--install \t enforce that the latest git repo of the deep-start script is installed
     -j|--jupyter \t start JupyterLab; if not installed, will be automatically installed
-    -o|--onedata \t mount remote storage using oneclient
+    -o|--opencode \t start OpenCode; if not installed, will be automatically installed
+       --onedata \t mount remote storage using oneclient
     -s|--vscode  \t start VSCode (code-server); if not installed, will be automatically installed
     -v|--version \t print script version and exit
     NOTE: if you try to start deepaas AND jupyterlab or vscode, only deepaas will start!" 1>&2; exit 0; 
@@ -123,7 +133,7 @@ function usage()
 function check_arguments()
 {
     OPTIONS=hcgdijorsv
-    LONGOPTS=help,cpu,gpu,deepaas,install,jupyter,onedata,rclone,vscode,version
+    LONGOPTS=help,cpu,gpu,deepaas,install,jupyter,opencode,onedata,rclone,vscode,version
     # https://stackoverflow.com/questions/192249/how-do-i-parse-command-line-arguments-in-bash
     # saner programming env: these switches turn some bugs into errors
     set -o errexit -o pipefail -o noclobber -o nounset
@@ -181,7 +191,11 @@ function check_arguments()
                 use_jupyter=true
                 shift
                 ;;
-            -o|--onedata)
+            -o|--opencode)
+                use_opencode=true
+                shift
+                ;;
+            --onedata)
                 use_onedata=true
                 shift
                 ;;
@@ -239,6 +253,43 @@ function check_env()
    fi   
 }
 
+
+function install_opencode() {
+   # Function to check, install, and configure opencode
+   if command -v opencode >/dev/null 2>&1; then
+      echo "[INFO] OpenCode already installed!"
+   else
+      echo "[INFO] OpenCode not found! Installing..."
+      # Install using official install script
+      # Check GLIBC version to determine which OpenCode version to install
+      GLIBC_VERSION=$(ldd --version | awk '/ldd/{print $NF}')
+      if [[ $(version "$GLIBC_VERSION") -ge $(version "2.29") ]]; then
+         install_opencode_cmd="curl -fsSL https://opencode.ai/install | bash"
+      else
+         echo "[WARNING] GLIBC version is $GLIBC_VERSION, which is less than 2.29. Installing OpenCode version ${opencode_for_old_glibc} instead."
+         install_opencode_cmd="curl -fsSL https://opencode.ai/install | bash -s -- --version ${opencode_for_old_glibc}"
+      fi
+   fi
+
+   # install opencode, return 1 in case of error
+   if ! $install_opencode_cmd; then
+        return 1
+   fi
+
+   if [ -z "${AI4EOSC_LLM_KEY:-}" ]; then
+      echo "[WARNING] AI4EOSC_LLM_KEY environment variable is not set. OpenCode LLM may not work properly."
+   fi
+
+   # Configure AI4EOSC LLM only if the user has no existing config
+   if [ ! -f "${HOME}/.config/opencode/opencode.jsonc" ] && \
+      [ ! -f "${HOME}/.config/opencode/opencode.json" ]; then
+      mkdir -p "${HOME}/.config/opencode"
+      cp "${SCRIPT_DIR}/opencode/opencode.jsonc" "${HOME}/.config/opencode/opencode.jsonc"
+      echo "[INFO] OpenCode configuration copied to ${HOME}/.config/opencode/"
+   fi
+   echo "[INFO] OpenCode installation complete!"
+}
+
 check_nvidia
 check_arguments "$0" "$@"
 
@@ -269,10 +320,16 @@ if [[ "$use_deepaas" = true && "$use_vscode" = true ]]; then
    echo "[WARNING] You are trying to start DEEPaaS AND VSCode, only DEEPaaS will start!"
 fi
 
+# if you try to start deepaas AND opencode, only deepaas will start!
+if [[ "$use_deepaas" = true && "$use_opencode" = true ]]; then
+   use_opencode=false
+   echo "[WARNING] You are trying to start DEEPaaS AND OpenCode, only DEEPaaS will start!"
+fi
+
 # debugging printout
 [[ "$debug_it" = true ]] && echo "[DEBUG] cpu: '$cpu_mode', gpu: '$gpu_mode', \
-deepaas: '$use_deepaas', jupyter: '$use_jupyter', rclone: '$use_rclone', \
-onedata: '$use_onedata', vscode: '$use_vscode'"
+deepaas: '$use_deepaas', jupyter: '$use_jupyter', opencode: '$use_opencode', \
+onedata: '$use_onedata', rclone: '$use_rclone', vscode: '$use_vscode'"
 
 if [ "$force_install" = true ]; then
    # force installation of the deep-start script (most recent version from github)
@@ -314,8 +371,9 @@ if [ "$use_onedata" = true ]; then
    onedata_pid=$(pidof oneclient)
    echo "[ONEDATA] PID=$onedata_pid"
    check_pid "$onedata_pid" "$onedata_error"
-   # if neither deepaas or jupyter is selected, enable deepaas:
-   [[ "$use_deepaas" = false && "$use_jupyter" = false ]] && use_deepaas=true
+   # if neither deepaas or jupyter or vscode or opencode is selected, enable deepaas:
+   [[ "$use_deepaas" = false && "$use_jupyter" = false && \
+   "$use_opencode" = false && "$use_vscode" = false ]] && use_deepaas=true
 fi
 
 if [ "$use_rclone" = true ]; then
@@ -333,8 +391,9 @@ if [ "$use_rclone" = true ]; then
    rclone_pid=$!
    echo "[RCLONE] PID=$rclone_pid"
    check_pid "$rclone_pid" "$rclone_error"
-   # if neither deepaas or jupyter is selected, enable deepaas:
-   [[ "$use_deepaas" = false && "$use_jupyter" = false ]] && use_deepaas=true
+   # if neither deepaas or jupyter or vscode or opencode is selected, enable deepaas:
+   [[ "$use_deepaas" = false && "$use_jupyter" = false && \
+   "$use_opencode" = false && "$use_vscode" = false ]] && use_deepaas=true
 fi
 
 if [ "$use_deepaas" = true ]; then
@@ -357,6 +416,11 @@ if [ "$use_jupyter" = true ]; then
    else
       echo "[INFO] jupyterlab is NOT found! Trying to install.."
       pip3 install jupyterlab
+   fi
+
+   # install opencode
+   if ! install_opencode; then
+      echo "[WARNING] OpenCode installation failed! Continuing without it."
    fi
 
    # check if JUPYTER_CONFIG_DIR is NOT set, set to ${SCRIPT_DIR}
@@ -410,6 +474,11 @@ if [ "$use_vscode" = true ]; then
       rm -rf ${HOME}/.cache/code-server /tmp/*
    fi
 
+   # install opencode
+   if ! install_opencode; then
+      echo "[WARNING] OpenCode installation failed! Continuing without it."
+   fi
+
    # add certificates if they exist
    if [ -f "${IDE_KEY_PATH}" ] && [ -f "${IDE_CERT_PATH}" ]; then
       vscode_certs=" --cert-key ${IDE_KEY_PATH} --cert=${IDE_CERT_PATH}"
@@ -458,6 +527,24 @@ if [ "$use_vscode" = true ]; then
 
    cmd="code-server --disable-telemetry --bind-addr 0.0.0.0:$IDE_PORT --user-data-dir=${SCRIPT_DIR}/vscode/code-server/ ${vscode_certs}"
    echo "[VSCode] PORT=$IDE_PORT, $cmd"
+   $cmd
+   # we can't put process in the background, as the container will stop
+fi
+
+
+if [ "$use_opencode" = true ]; then
+   echo "[INFO] Attempt to start OpenCode server"
+   # install opencode
+   if ! install_opencode; then
+      echo "[ERROR] OpenCode installation failed! Cannot start OpenCode server."
+      exit 1
+   fi
+   # opencode is installed in ${HOME}/.opencode/bin, add to PATH, refresh cache
+   export PATH="${HOME}/.opencode/bin:$PATH"
+   hash -r   # clear Bash's command lookup cache
+   [[ ! -v OPENCODE_SERVER_PASSWORD ]] && export OPENCODE_SERVER_PASSWORD=$idePASSWORD
+   cmd="opencode serve --hostname 0.0.0.0 --port $IDE_PORT"
+   echo "[OpenCode] PORT=$IDE_PORT, $cmd"
    $cmd
    # we can't put process in the background, as the container will stop
 fi
