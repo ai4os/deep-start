@@ -256,6 +256,11 @@ function check_env()
 
 function install_opencode() {
    # Function to check, install, and configure opencode
+   # Add ${HOME}/.opencode/bin/opencode to PATH (end)
+   export PATH="$PATH:${HOME}/.opencode/bin"
+   hash -r   # clear Bash's command lookup cache
+
+   # if opencode not found, try to install it using the official install script
    if command -v opencode >/dev/null 2>&1; then
       echo "[INFO] OpenCode already installed!"
    else
@@ -264,17 +269,26 @@ function install_opencode() {
       # Check GLIBC version to determine which OpenCode version to install
       GLIBC_VERSION=$(ldd --version | awk '/ldd/{print $NF}')
       if [[ $(version "$GLIBC_VERSION") -ge $(version "2.29") ]]; then
-         if ! curl -fsSL https://opencode.ai/install | bash; then
+         if ! curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path; then
             return 1
          fi
       else
          echo "[WARNING] GLIBC version is $GLIBC_VERSION, which is less than 2.29. Installing OpenCode version ${opencode_for_old_glibc} instead."
-         if ! curl -fsSL https://opencode.ai/install | bash -s -- --version ${opencode_for_old_glibc}; then
+         if ! curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path --version ${opencode_for_old_glibc}; then
             return 1
          fi
       fi
    fi
 
+   # Move the opencode binary to /usr/local/bin (if exists in ${HOME}/.opencode/bin)
+   if [ -f "${HOME}/.opencode/bin/opencode" ]; then
+      mv "${HOME}/.opencode/bin/opencode" /usr/local/bin/opencode
+      [[ -f /usr/local/bin/opencode ]] && rm -rf /tmp/* "${HOME}/.opencode"
+   fi
+   # Refresh PATH cache again
+   hash -r
+
+   # Check if AI4EOSC_LLM_KEY is set, warn if not
    if [ -z "${AI4EOSC_LLM_KEY:-}" ]; then
       echo "[WARNING] AI4EOSC_LLM_KEY environment variable is not set. OpenCode LLM may not work properly."
    fi
@@ -533,14 +547,11 @@ fi
 
 if [ "$use_opencode" = true ]; then
    echo "[INFO] Attempt to start OpenCode server"
-   # install opencode
+   # install opencode in /usr/local/bin if not yet installed
    if ! install_opencode; then
       echo "[ERROR] OpenCode installation failed! Cannot start OpenCode server."
       exit 1
    fi
-   # opencode is installed in ${HOME}/.opencode/bin, add to PATH, refresh cache
-   export PATH="${HOME}/.opencode/bin:$PATH"
-   hash -r   # clear Bash's command lookup cache
    [[ ! -v OPENCODE_SERVER_PASSWORD ]] && export OPENCODE_SERVER_PASSWORD=$idePASSWORD
    cmd="opencode serve --hostname 0.0.0.0 --port $IDE_PORT"
    echo "[OpenCode] PORT=$IDE_PORT, $cmd"
