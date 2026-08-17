@@ -256,27 +256,34 @@ function check_env()
 
 function install_opencode() {
    # Function to check, install, and configure opencode
-   # Add ${HOME}/.opencode/bin/opencode to PATH (end)
+   # Install via official script fetched from GitHub (not opencode.ai) to avoid
+   # SSL inspection issues in corporate CI environments (e.g. Cisco Umbrella).
+   # Potential problem: rate limit of githubusercontent.com
+
+   # Add ${HOME}/.opencode/bin/opencode to PATH (end) (if was installed locally)
    export PATH="$PATH:${HOME}/.opencode/bin"
    hash -r   # clear Bash's command lookup cache
 
-   # if opencode not found, try to install it using the official install script
+   # if opencode not found, try to install it using the official install script from GitHub (!)
    if command -v opencode >/dev/null 2>&1; then
       echo "[INFO] OpenCode already installed!"
    else
       echo "[INFO] OpenCode not found! Installing..."
-      # Install using official install script, return 1 in case of error
+      # Install using official GitHub install script, return 1 in case of error
+      opencode_tag=$(curl -sI https://github.com/anomalyco/opencode/releases/latest \
+                | grep -i "^location:" \
+                | sed 's|.*/tag/||' | tr -d '\r\n')
+      opencode_version="${opencode_tag#v}"
       # Check GLIBC version to determine which OpenCode version to install
-      GLIBC_VERSION=$(ldd --version | awk '/ldd/{print $NF}')
-      if [[ $(version "$GLIBC_VERSION") -ge $(version "2.29") ]]; then
-         if ! curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path; then
-            return 1
-         fi
-      else
-         echo "[WARNING] GLIBC version is $GLIBC_VERSION, which is less than 2.29. Installing OpenCode version ${opencode_for_old_glibc} instead."
-         if ! curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path --version ${opencode_for_old_glibc}; then
-            return 1
-         fi
+      glibc_version=$(ldd --version | awk '/ldd/{print $NF}')
+      if [[ $(version "$glibc_version") -lt $(version "2.29") ]]; then
+         echo "[WARNING] GLIBC version is $glibc_version, which is less than 2.29!"
+         opencode_version=${opencode_for_old_glibc}
+      fi
+      echo "[INFO] GLIBC version is $glibc_version. Installing OpenCode version ${opencode_version}."
+      if ! curl -fsSL "https://raw.githubusercontent.com/anomalyco/opencode/${opencode_tag}/install" \
+            | bash -s -- --no-modify-path --version ${opencode_version}; then
+         return 1
       fi
    fi
 
