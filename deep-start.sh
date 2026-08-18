@@ -55,10 +55,10 @@ debug_it=true
 ## Paths
 script_install_dir="/srv/.deep-start"
 script_git_repo="https://github.com/ai4os/deep-start"
-script_git_branch="master"
+script_git_branch="v3.0.0"
 vscode_workspace_file="srv.code-workspace"
-vscode_extensions="vscode/code-server/vscode-extensions.txt"
-vscode_extensions_url="https://raw.githubusercontent.com/ai4os/deep-start/${script_git_branch}/${vscode_extensions}"
+ide_extensions="ide-extensions.ini"
+ide_extensions_url="https://raw.githubusercontent.com/ai4os/deep-start/${script_git_branch}/${ide_extensions}"
 # !(work-around) some (old) images are using GLIBC2.27, or GLIBC2.28
 # !(work-around) while recent code-server requires GLIBC2.28 at least
 # !(work-around) opencode v1.14.49+ requires GLIBC2.29; pin older version for GLIBC < 2.29
@@ -71,8 +71,9 @@ SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 # if not => define as script_install_dir
 [[ ! -d ${SCRIPT_DIR} ]] && SCRIPT_DIR=${script_install_dir}
 
-# For AI4EOSC and iMagine, we change version to 2. The VERSION is read from the VERSION file.
-VERSION="2.2.0"
+# For AI4EOSC and iMagine, we change the version to 2.
+# For EOSC-ARENA, we change the version to 3. The VERSION is read from the VERSION file.
+VERSION="3.0.0"
 [[ -f "${SCRIPT_DIR}/VERSION" ]] && VERSION=$(cat "${SCRIPT_DIR}/VERSION")
 
 # check if IDE_KEY_PATH and CERT_PATH exist, if not => put some default values (SSL)
@@ -125,7 +126,7 @@ function usage()
        --onedata \t mount remote storage using oneclient
     -s|--vscode  \t start VSCode (code-server); if not installed, will be automatically installed
     -v|--version \t print script version and exit
-    NOTE: if you try to start deepaas AND jupyterlab or vscode, only deepaas will start!" 1>&2; exit 0; 
+    NOTE: if you try to start deepaas AND jupyterlab or vscode or opencode, only deepaas will start!" 1>&2; exit 0;
 # Comment possible RCLONE option. Leave it as "undocumented"
 #    -r|--rclone  \t mount remote storage with rclone (experimental!)
 }
@@ -253,6 +254,37 @@ function check_env()
    fi   
 }
 
+function get_ide_extensions_manifest(){
+   # Function to retrieve remote manifest file with extensions
+   # Returns the path to the manifest file
+   local manifest_path="${SCRIPT_DIR}/${ide_extensions}"
+   local manifest_path_remote="${manifest_path}.remote"
+
+   if curl -fsSL -o "${manifest_path_remote}" "${ide_extensions_url}"; then
+      echo "${manifest_path_remote}"
+   elif [[ -f "${manifest_path}" ]]; then
+      echo "${manifest_path}"
+   else
+      return 0
+   fi
+}
+
+function extract_ini_section() {
+   # Function to read a specific section from an INI-style manifest file
+   local manifest_path="$1"
+   local section="$2"
+
+   awk -v section="${section}" '
+      /^[[:space:]]*($|#)/ { next }
+      /^[[:space:]]*\[[[:alnum:]_-]+\][[:space:]]*$/ {
+         header = $0
+         gsub(/^[[:space:]]+|[[:space:]]+$/, "", header)
+         in_section = (header == "[" section "]")
+         next
+      }
+      in_section { print }
+   ' "${manifest_path}"
+}
 
 function install_opencode() {
    # Function to check, install, and configure opencode
@@ -438,6 +470,16 @@ if [ "$use_jupyter" = true ]; then
       pip3 install jupyterlab
    fi
 
+   # Install prebuilt JupyterLab extensions listed as pip requirements.
+   ide_extensions_manifest=$(get_ide_extensions_manifest)
+   if [[ -n "${ide_extensions_manifest}" ]]; then
+      echo "[INFO] Installing JupyterLab extensions using file: ${ide_extensions_manifest}"
+      while IFS= read -r jupyter_extension; do
+         [[ -z "${jupyter_extension}" ]] && continue
+         pip3 install "${jupyter_extension}" || continue
+      done < <(extract_ini_section "${ide_extensions_manifest}" "jupyterlab")
+   fi
+
    # install opencode
    if ! install_opencode; then
       echo "[WARNING] OpenCode installation failed! Continuing without it."
@@ -509,28 +551,18 @@ if [ "$use_vscode" = true ]; then
    # if there is no workspace file, put default one (not sure if needed...)
    [[ ! -f "$vscode_workspace_file" ]] && (cp ${SCRIPT_DIR}/vscode/$vscode_workspace_file $vscode_workspace_file)
 
-   # install vscode extensions
-   # try to load extensions from the remote file $vscode_extensions_url (see top)
-   # if failes, load extensions from the local file
-   # https://stackoverflow.com/questions/8195950/reading-lines-in-a-file-and-avoiding-lines-with-with-bash
-   vscode_extensions=${SCRIPT_DIR}/${vscode_extensions}
-   vscode_extensions_remote=${vscode_extensions}".remote"
-   curl -o $vscode_extensions_remote $vscode_extensions_url
-   [[ $? -eq 0 ]] && vscode_extensions=${vscode_extensions_remote}
-   echo "[INFO] For installing extensions using file: $vscode_extensions"
-   if [ -f "$vscode_extensions" ]; then
-      # allow comments started with '#'
-      grep -v '^#' ${vscode_extensions} | while read -r wl
-      do
-      # skip empty lines
-         if [ ${#wl} -ge 5 ]; then
-            code-server --user-data-dir=${SCRIPT_DIR}/vscode/code-server/ --install-extension "${wl}" || continue
-         fi
-      done
+   # Install VS Code extensions from the shared manifest.
+   ide_extensions_manifest=$(get_ide_extensions_manifest)
+   if [[ -n "${ide_extensions_manifest}" ]]; then
+      echo "[INFO] Installing VS Code extensions using file: ${ide_extensions_manifest}"
+      while IFS= read -r vscode_extension; do
+         [[ -z "${vscode_extension}" ]] && continue
+         code-server --user-data-dir=${SCRIPT_DIR}/vscode/code-server/ --install-extension "${vscode_extension}" || continue
+      done < <(extract_ini_section "${ide_extensions_manifest}" "vscode")
    fi
    
    # Configure Continue.dev if extension is requested
-   if grep -v '^#' "$vscode_extensions" 2>/dev/null | grep -qi 'Continue.continue'; then
+   if [[ -n "${ide_extensions_manifest}" ]] && extract_ini_section "${ide_extensions_manifest}" "vscode" | grep -qi '^Continue\.continue$'; then
       mkdir -p ${HOME}/.continue
       cp ${SCRIPT_DIR}/continue/config.yaml ${HOME}/.continue/config.yaml
       # Update API key if provided via environment variable

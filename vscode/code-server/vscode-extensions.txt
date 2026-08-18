@@ -1,4 +1,7 @@
 # =============================================================================
+# DISCONTINUED! From version 3.0.0 - use ide-extensions.ini
+# KEPT for compatibility with <v3.0.0
+# =============================================================================
 # VSCode Extensions - AI4OS Development Environment
 # For code-server (Open VSX Registry: https://open-vsx.org/)
 # Format: publisher.extension
