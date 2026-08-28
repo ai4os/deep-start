@@ -562,6 +562,7 @@ if [ "$use_vscode" = true ]; then
    fi
    
    # Configure Continue.dev if extension is requested
+   # keep the code still, but Continue.dev is not maintained anymore
    if [[ -n "${ide_extensions_manifest}" ]] && extract_ini_section "${ide_extensions_manifest}" "vscode" | grep -qi '^Continue\.continue$'; then
       mkdir -p ${HOME}/.continue
       cp ${SCRIPT_DIR}/continue/config.yaml ${HOME}/.continue/config.yaml

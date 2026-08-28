@@ -39,7 +39,6 @@ Installed via [Open VSX](https://open-vsx.org) from the `[vscode]` section of `i
 | `aaron-bond.better-comments` | MIT |
 | `njpwerner.autodocstring` | MIT |
 | `eamodio.gitlens` | MIT |
-| `Continue.continue` | Apache-2.0 |
 | `fedaykindev.openchamber` | MIT |
 
 

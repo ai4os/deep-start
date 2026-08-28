@@ -50,7 +50,8 @@ During execution of `deep-start`, the manifest from GitHub is preferred, with th
 
 (directory) continue
 --------------------
-contains a very basic configuration for Continue.dev - an open-source AI code agent for VSCode
+contains a very basic configuration for Continue.dev - an open-source AI code agent for VSCode. 
+Note: Continue.dev is deprecated! See https://github.com/continuedev/continue - it is read-only.
 
 (directory) lab
 ----------------
