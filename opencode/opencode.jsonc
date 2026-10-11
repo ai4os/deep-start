@@ -1,29 +1,82 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "autoupdate": false,
-  "provider": {
+  "autoupdate": true,
+  // Plugin for pruning context
+  //"plugins": ["@tarquinen/opencode-dcp@latest"],
+
+  "compaction": {
+    "auto": true,
+    "keep": { "tokens": 10000 },
+    "buffer": 8000,
+  },
+
+  "providers": {
     "ai4eosc": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "AI4EOSC LLM",
-      "options": {
+      "package": "@ai-sdk/openai-compatible",
+      "name": "AI4EOSC",
+      "settings": {
         "baseURL": "https://vllm.cloud.ai4eosc.eu/",
         "apiKey": "{env:AI4EOSC_LLM_KEY}"
       },
       "models": {
-        "AI4EOSC/default": { },
-        "AI4EOSC/Qwen/Qwen3-14B": { }
+        "AI4EOSC/default-agentic": {
+          "name": "AI4EOSC (default-agentic)",
+          "limit": {
+            "context": 29999,
+            "output": 4096
+          }
+        },
+        "AI4EOSC/default-embeddings": {
+          "name": "AI4EOSC (default-embeddings)",
+          "limit": {
+            "context": 29999,
+            "output": 4096
+          }
+        }
+      }
+    },
+
+    // Helmholtz Blablador service, https://blablador.fz-juelich.de/
+    "blablador": {
+      "package": "@ai-sdk/openai-compatible",
+      "name": "Blablador",
+      "settings": {
+        "baseURL": "https://api.blablador.fz-juelich.de/v1",
+        "apiKey": "{env:BLABLADOR_API_KEY}"
+      },
+
+      "models": {
+        "alias-code": {
+          "name": "Blablador Code (alias-code)",
+          "limit": {
+            "context": 98304,
+            "output": 32768
+          }
+        },
+        "alias-huge": {
+          "name": "Blablador Minimax (alias-huge)",
+          "limit": {
+            "context": 98304,
+            "output": 32768
+          }
+        },
+        "alias-fast": {
+          "name": "Blablador Fast (alias-fast)",
+           "limit": {
+            "context": 98304,
+            "output": 32768
+          }
+        },
+        "alias-large": {
+          "name": "Blablador Large (alias-large)",
+           "limit": {
+            "context": 98304,
+            "output": 32768
+          }
+        }
       }
     }
-  },
-  // permission control, check: https://opencode.ai/docs/permissions/
-  // if commented out, the default permission is used
-//   "permission": {
-//     "skill": {
-//       "*": "ask",
-//       "read": "allow",
-//       "pr-review": "allow",
-//       "internal-*": "deny",
-//       "experimental-*": "ask"
-//     }
-//   }
+  }
+
+// permission control, check: https://opencode.ai/v2/docs/permissions/
 }

@@ -59,6 +59,8 @@ script_git_branch="v3.0.0"
 vscode_workspace_file="srv.code-workspace"
 ide_extensions="ide-extensions.ini"
 ide_extensions_url="https://raw.githubusercontent.com/ai4os/deep-start/${script_git_branch}/${ide_extensions}"
+opencode_config="opencode.jsonc"
+opencode_config_url="https://raw.githubusercontent.com/ai4os/deep-start/${script_git_branch}/opencode/${opencode_config}"
 # !(work-around) some (old) images are using GLIBC2.27, or GLIBC2.28
 # !(work-around) while recent code-server requires GLIBC2.28 at least
 # !(work-around) opencode v1.14.49+ requires GLIBC2.29; pin older version for GLIBC < 2.29
@@ -73,8 +75,17 @@ SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 
 # For AI4EOSC and iMagine, we change the version to 2.
 # For EOSC-ARENA, we change the version to 3. The VERSION is read from the VERSION file.
-VERSION="3.0.0"
-[[ -f "${SCRIPT_DIR}/VERSION" ]] && VERSION=$(cat "${SCRIPT_DIR}/VERSION")
+version_default="3.0.0"
+VERSION="${version_default}"
+if [[ -f "${SCRIPT_DIR}/VERSION" ]]; then
+   # The VERSION file is the source of truth and is trusted as-is:
+   # unexpected content should surface to users rather than be masked.
+   # On a read failure, report the baked-in default as a lower bound.
+   if ! VERSION=$(cat "${SCRIPT_DIR}/VERSION" 2>/dev/null) || [[ -z "${VERSION}" ]]; then
+      echo "[WARNING] Could not read version from ${SCRIPT_DIR}/VERSION. Reporting '${version_default}+ (unknown)'." >&2
+      VERSION="${version_default}+ (unknown)"
+   fi
+fi
 
 # check if IDE_KEY_PATH and CERT_PATH exist, if not => put some default values (SSL)
 [[ ! -v IDE_KEY_PATH ]] && IDE_KEY_PATH="${SCRIPT_DIR}/ssl/key.pem"
@@ -254,19 +265,34 @@ function check_env()
    fi   
 }
 
-function get_ide_extensions_manifest(){
-   # Function to retrieve remote manifest file with extensions
-   # Returns the path to the manifest file
-   local manifest_path="${SCRIPT_DIR}/${ide_extensions}"
-   local manifest_path_remote="${manifest_path}.remote"
+function fetch_remote_file(){
+   # Generic function to fetch a file from a remote URL
+   # Falls back to the local (baked-in) copy if the fetch fails
+   # Usage: fetch_remote_file <url> <local_path>
+   # Returns (echoes) the path of the fetched or local file; empty on failure
+   local url="$1"
+   local local_path="$2"
+   local remote_path="${local_path}.remote"
 
-   if curl -fsSL -o "${manifest_path_remote}" "${ide_extensions_url}"; then
-      echo "${manifest_path_remote}"
-   elif [[ -f "${manifest_path}" ]]; then
-      echo "${manifest_path}"
+   if curl -fsSL -o "${remote_path}" "${url}"; then
+      echo "${remote_path}"
+   elif [[ -f "${local_path}" ]]; then
+      echo "${local_path}"
    else
       return 0
    fi
+}
+
+function get_ide_extensions_manifest(){
+   # Function to retrieve remote manifest file with extensions
+   # Returns the path to the manifest file
+   fetch_remote_file "${ide_extensions_url}" "${SCRIPT_DIR}/${ide_extensions}"
+}
+
+function get_opencode_config(){
+   # Function to retrieve the remote OpenCode configuration
+   # Returns the path to the configuration file
+   fetch_remote_file "${opencode_config_url}" "${SCRIPT_DIR}/opencode/${opencode_config}"
 }
 
 function extract_ini_section() {
@@ -335,9 +361,14 @@ function install_opencode() {
    # Configure AI4EOSC LLM only if the user has no existing config
    if [ ! -f "${HOME}/.config/opencode/opencode.jsonc" ] && \
       [ ! -f "${HOME}/.config/opencode/opencode.json" ]; then
-      mkdir -p "${HOME}/.config/opencode"
-      cp "${SCRIPT_DIR}/opencode/opencode.jsonc" "${HOME}/.config/opencode/opencode.jsonc"
-      echo "[INFO] OpenCode configuration copied to ${HOME}/.config/opencode/"
+      opencode_config_file=$(get_opencode_config)
+      if [[ -n "${opencode_config_file}" ]]; then
+         mkdir -p "${HOME}/.config/opencode"
+         cp "${opencode_config_file}" "${HOME}/.config/opencode/opencode.jsonc"
+         echo "[INFO] OpenCode configuration copied to ${HOME}/.config/opencode/"
+      else
+         echo "[WARNING] No OpenCode configuration found (neither remote nor local)!"
+      fi
    fi
    echo "[INFO] OpenCode installation complete!"
 }

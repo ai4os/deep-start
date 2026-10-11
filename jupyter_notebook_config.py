@@ -36,4 +36,3 @@ if 'jupyterPASSWORD' in os.environ:
     if password and len(password) > 8:
         app.password = passwd(password)
     del os.environ['jupyterPASSWORD']
-
