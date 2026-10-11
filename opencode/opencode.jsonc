@@ -32,6 +32,9 @@
     { "action": "websearch", "resource": "*", "effect": "allow" }
   ],
 
+  // Default first model
+  "model": "ai4eosc/AI4EOSC/default-agentic",
+
   "providers": {
     "ai4eosc": {
       "package": "@ai-sdk/openai-compatible",
