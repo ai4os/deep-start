@@ -4,11 +4,33 @@
   // Plugin for pruning context
   //"plugins": ["@tarquinen/opencode-dcp@latest"],
 
+  // Custom AI4EOSC search provider plugin (SearXNG backend behind the vLLM
+  // gateway). The __DEEP_START_DIR__ placeholder is replaced by deep-start.sh
+  // with the actual script directory at config install time. The plugin is
+  // authenticated with AI4EOSC_LLM_KEY and registers the provider only when
+  // that key is set; otherwise websearch falls back to the built-in (keyless)
+  // providers. Endpoint can be overridden with AI4EOSC_SEARCH_URL.
+  "plugins": [
+    { "package": "__DEEP_START_DIR__/opencode/plugins/ai4eosc-search" }
+  ],
+
   "compaction": {
     "auto": true,
     "keep": { "tokens": 10000 },
     "buffer": 8000,
   },
+
+  "websearch": {
+    "provider": "random",
+  },
+
+  // Websearch works keyless out-of-the-box (no search provider API key needed;
+  // OpenCode sends an access-mode "keyless" header to the search provider).
+  // Pre-authorize it so headless "opencode serve" deployments don't block on
+  // the interactive first-search permission prompt.
+  "permissions": [
+    { "action": "websearch", "resource": "*", "effect": "allow" }
+  ],
 
   "providers": {
     "ai4eosc": {

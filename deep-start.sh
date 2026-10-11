@@ -365,6 +365,8 @@ function install_opencode() {
       if [[ -n "${opencode_config_file}" ]]; then
          mkdir -p "${HOME}/.config/opencode"
          cp "${opencode_config_file}" "${HOME}/.config/opencode/opencode.jsonc"
+         # Resolve the plugin path placeholder to the actual script directory
+         sed -i "s|__DEEP_START_DIR__|${SCRIPT_DIR}|g" "${HOME}/.config/opencode/opencode.jsonc"
          echo "[INFO] OpenCode configuration copied to ${HOME}/.config/opencode/"
       else
          echo "[WARNING] No OpenCode configuration found (neither remote nor local)!"
