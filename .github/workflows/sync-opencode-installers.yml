@@ -1,0 +1,83 @@
+# Sync OpenCode installer scripts from ai4os/ai4os-dev-env (source of truth)
+# into this repository, opening a pull request when they differ.
+#
+# deep-start.sh bakes these scripts (scripts/install-opencode-v*.sh) and uses
+# them in install_opencode(); the entrypoint-based runtime update delivers
+# the synced copies to running containers.
+#
+# Notes:
+# - No PAT required: the workflow token can open pull requests in its own
+#   repository (see the permissions block below).
+# - Scheduled runs only fire from the repository's DEFAULT branch; once this
+#   file is also present on master, the cron runs automatically. Until then,
+#   use the manual trigger (Actions tab -> Run workflow) from any branch.
+name: sync-opencode-installers
+
+on:
+  schedule:
+    - cron: "7 */8 * * *"  # every 8h check
+  workflow_dispatch: {}    # manual: sync now
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout deep-start
+        uses: actions/checkout@v4
+        with:
+          ref: v3.0.0
+
+      - name: Compare installer scripts with ai4os-dev-env
+        env:
+          SRC_REPO: ai4os/ai4os-dev-env
+          SRC_BRANCH: main
+        run: |
+          changed=0
+          for f in install-opencode-v1.sh install-opencode-v2.sh; do
+            if ! curl -fsSL --retry 3 -o "/tmp/${f}" \
+                 "https://raw.githubusercontent.com/${SRC_REPO}/${SRC_BRANCH}/scripts/${f}"; then
+              echo "[ERROR] Could not download scripts/${f} from ${SRC_REPO}@${SRC_BRANCH}" >&2
+              exit 1
+            fi
+            if [ ! -s "/tmp/${f}" ]; then
+              echo "[ERROR] Downloaded scripts/${f} is empty - aborting (would corrupt the copy)" >&2
+              exit 1
+            fi
+            if ! cmp -s "/tmp/${f}" "scripts/${f}"; then
+              echo "[INFO] scripts/${f} differs from ${SRC_REPO}@${SRC_BRANCH} - updating"
+              cp "/tmp/${f}" "scripts/${f}"
+              changed=1
+            else
+              echo "[INFO] scripts/${f} is up to date"
+            fi
+          done
+          echo "CHANGED=${changed}" >> "$GITHUB_ENV"
+
+      - name: Open pull request with updated scripts
+        if: env.CHANGED == '1'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: sync-opencode-installers
+          base: v3.0.0
+          delete-branch: true
+          title: 'chore: sync OpenCode installer scripts from ai4os-dev-env'
+          body: |
+            Automated sync of `scripts/install-opencode-v1.sh` and
+            `scripts/install-opencode-v2.sh` from
+            [ai4os/ai4os-dev-env@main](https://github.com/ai4os/ai4os-dev-env/tree/main/scripts).
+
+            ai4os-dev-env is the source of truth; deep-start keeps baked-in
+            copies used by `install_opencode()` in deep-start.sh.
+          commit-message: 'chore: sync OpenCode installer scripts from ai4os-dev-env'
+
+      - name: Summary
+        run: |
+          if [ "${CHANGED:-0}" = "1" ]; then
+            echo "[INFO] Pull request with updated installer scripts created (or updated)"
+          else
+            echo "[INFO] Installer scripts are in sync - nothing to do"
+          fi
