@@ -63,7 +63,7 @@ opencode_config="opencode.jsonc"
 opencode_config_url="https://raw.githubusercontent.com/ai4os/deep-start/${script_git_branch}/opencode/${opencode_config}"
 # !(work-around) some (old) images are using GLIBC2.27, or GLIBC2.28
 # !(work-around) while recent code-server requires GLIBC2.28 at least
-# !(work-around) opencode v1.14.49+ requires GLIBC2.29; pin older version for GLIBC < 2.29
+# !(work-around) opencode v2 binaries require GLIBC >= 2.29; pin the last compatible v1 for older GLIBC
 vscode_for_glibc227="4.16.1"
 opencode_for_old_glibc="1.14.48"
 # Script full path
@@ -314,34 +314,51 @@ function extract_ini_section() {
 
 function install_opencode() {
    # Function to check, install, and configure opencode
-   # Install via official script fetched from GitHub (not opencode.ai) to avoid
-   # SSL inspection issues in corporate CI environments (e.g. Cisco Umbrella).
-   # Potential problem: rate limit of githubusercontent.com
+   #
+   # Installers are shipped with deep-start (scripts/install-opencode-v*.sh)
+   # and are kept in sync with ai4os/ai4os-dev-env (source of truth).
+   #
+   # Workflow (mirrors ai4os-dev-env/Dockerfile):
+   # - OpenCode v2 binaries need GLIBC >= 2.29, GLIBC < 2.29: install the
+   #   pinned last compatible v1 (${opencode_for_old_glibc}) via the v1 script
+   # - OpenCode v2 binaries are installed via the v2 script
+   # - Both install scripts are synced from ai4oesc-dev-env and are baked into deep-start
 
    # Add ${HOME}/.opencode/bin/opencode to PATH (end) (if was installed locally)
    export PATH="$PATH:${HOME}/.opencode/bin"
    hash -r   # clear Bash's command lookup cache
 
-   # if opencode not found, try to install it using the official install script from GitHub (!)
+   # if opencode not found, install it using the baked-in install scripts
    if command -v opencode >/dev/null 2>&1; then
       echo "[INFO] OpenCode already installed!"
    else
       echo "[INFO] OpenCode not found! Installing..."
-      # Install using official GitHub install script, return 1 in case of error
-      opencode_tag=$(curl -sI https://github.com/anomalyco/opencode/releases/latest \
-                | grep -i "^location:" \
-                | sed 's|.*/tag/||' | tr -d '\r\n')
-      opencode_version="${opencode_tag#v}"
-      # Check GLIBC version to determine which OpenCode version to install
       glibc_version=$(ldd --version | awk '/ldd/{print $NF}')
       if [[ $(version "$glibc_version") -lt $(version "2.29") ]]; then
-         echo "[WARNING] GLIBC version is $glibc_version, which is less than 2.29!"
-         opencode_version=${opencode_for_old_glibc}
-      fi
-      echo "[INFO] GLIBC version is $glibc_version. Installing OpenCode version ${opencode_version}."
-      if ! curl -fsSL "https://raw.githubusercontent.com/anomalyco/opencode/${opencode_tag}/install" \
-            | bash -s -- --no-modify-path --version ${opencode_version}; then
-         return 1
+         echo "[INFO] GLIBC version is $glibc_version. Installing OpenCode version ${opencode_for_old_glibc}."
+         if [[ ! -f "${SCRIPT_DIR}/scripts/install-opencode-v1.sh" ]]; then
+            echo "[WARNING] Baked-in installer scripts/install-opencode-v1.sh is missing!"
+            return 1
+         fi
+         if ! bash "${SCRIPT_DIR}/scripts/install-opencode-v1.sh" --no-modify-path --version "${opencode_for_old_glibc}"; then
+            return 1
+         fi
+      else
+         opencode_version=$(curl -fsSL --max-time 30 \
+               "https://registry.npmjs.org/@opencode%2fcli-linux-x64/latest" 2>/dev/null \
+               | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')
+         if [[ -z "${opencode_version}" ]]; then
+            echo "[WARNING] Could not resolve the latest OpenCode version from the npm registry!"
+            return 1
+         fi
+         echo "[INFO] GLIBC version is $glibc_version. Installing OpenCode version ${opencode_version}."
+         if [[ ! -f "${SCRIPT_DIR}/scripts/install-opencode-v2.sh" ]]; then
+            echo "[WARNING] Baked-in installer scripts/install-opencode-v2.sh is missing!"
+            return 1
+         fi
+         if ! bash "${SCRIPT_DIR}/scripts/install-opencode-v2.sh" --no-modify-path --version "${opencode_version}"; then
+            return 1
+         fi
       fi
    fi
 
